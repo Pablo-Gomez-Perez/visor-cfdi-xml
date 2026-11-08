@@ -20,7 +20,7 @@ import javax.swing.JTextField;
 import javax.swing.SwingWorker;
 import javax.swing.border.EmptyBorder;
 
-import com.kathsoft.visor.app.model.configuracion.ConfiguracionSistema;
+import com.kathsoft.visor.App;\nimport com.kathsoft.visor.app.model.configuracion.ConfiguracionSistema;
 import com.kathsoft.visor.app.service.configuracion.ConexionMySqlService;
 import com.kathsoft.visor.app.service.configuracion.ConfiguracionLocalService;
 
@@ -285,13 +285,13 @@ public class Fr_ConfiguracionInicial extends JFrame {
                 try {
                     get();
                     lblEstado.setText(guardar
-                            ? "Configuración guardada. El siguiente módulo incorporará el acceso al sistema."
+                            ? "Configuración guardada. Continúe con el acceso al sistema."
                             : "Conexión MySQL verificada correctamente.");
                     if (guardar) {
                         JOptionPane.showMessageDialog(Fr_ConfiguracionInicial.this,
                                 "Configuración guardada correctamente.\n"
                                         + "Los XML permanecerán en el repositorio local seleccionado.",
-                                "Configuración inicial", JOptionPane.INFORMATION_MESSAGE);
+                                "Configuración inicial", JOptionPane.INFORMATION_MESSAGE);\n                        App.abrirConexion(datos);\n                        dispose();
                     }
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();

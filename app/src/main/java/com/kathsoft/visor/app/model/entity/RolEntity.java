@@ -15,7 +15,7 @@ public class RolEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id")
-    private Integer id;
+    private Short id;
 
     @Column(name = "clave", nullable = false, length = 40, unique = true)
     private String clave;
@@ -37,7 +37,7 @@ public class RolEntity {
         this.descripcion = descripcion;
     }
 
-    public Integer getId() { return id; }
+    public Short getId() { return id; }
 
     public String getClave() { return clave; }
 
