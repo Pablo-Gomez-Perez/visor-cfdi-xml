@@ -1,65 +1,75 @@
 # Visor CFDI XML
 
-Aplicación de escritorio multiplataforma para administración de CFDI mexicanos.
+Aplicación de escritorio multiplataforma para la gestión documental, fiscal y financiera de CFDI mexicanos.
 
-## Estado actual: RF-001 — Configuración inicial
+## Tecnologías
 
-Esta rama incorpora exclusivamente el primer módulo del MVP:
+Java SE 17, Maven, Swing, Eclipse WindowBuilder, GroupLayout, FlatLaf, Hibernate ORM/JPA, JDBC especializado y MySQL 8.
 
-- Formulario Swing de configuración, diseñado con GroupLayout explícito y constructor sin argumentos para Eclipse WindowBuilder.
-- Apariencia FlatLaf (sin reemplazar los componentes estándar de Swing).
-- Captura de servidor, puerto, esquema y usuario de MySQL 8.
-- Prueba real de conexión JDBC mediante SELECT 1, en un SwingWorker.
-- Selección, creación y comprobación de la carpeta local para el repositorio de XML originales.
-- Persistencia de parámetros no secretos en el directorio del usuario.
+**Referencia principal del esquema:** `app/database/schema/visor_cfdi_mysql8_schema_v1.sql`. El código Java nunca crea ni modifica automáticamente las tablas.
 
-**No hay aún importador de XML, tablas de CFDI, administración de usuarios ni migraciones de base de datos.** La creación del esquema MySQL es responsabilidad del administrador en esta etapa.
+## Funcionalidades implementadas
 
-### Requisitos
+### RF-001 — Configuración inicial
+- Configuración de servidor, puerto, esquema y usuario MySQL.
+- Prueba de conexión JDBC sin bloquear Swing.
+- Selección del directorio local de documentos XML.
+- Persistencia local de parámetros no secretos en `~/.visor-cfdi-xml/config.properties`.
+- Contraseña de MySQL solicitada en cada arranque; no se guarda en disco.
 
-- JDK 17.
-- Maven 3.9 o compatible.
-- Servidor MySQL 8 accesible, con una base de datos ya creada.
+### RF-002 — Administración de usuarios
+- Arranque con Hibernate/JPA y conexión MySQL (pool HikariCP).
+- Alta inicial del primer administrador, solo si no existen cuentas.
+- Roles iniciales idempotentes `ADMIN` y `CONSULTA`.
+- Autenticación con contraseña de la **aplicación**, independiente de MySQL.
+- Administración por ADMIN: listar, crear, editar nombre completo, **login** y correo, activar/desactivar, cambiar rol básico y restablecer contraseña.
+- Protección contra desactivar o degradar al último administrador activo.
+- Registro de eventos administrativos en `bitacora_evento`.
+- Contraseñas con PBKDF2-HMAC-SHA256, sal individual y 600 000 iteraciones.
+- Formularios Swing con componentes explícitos, constructor vacío y GroupLayout para WindowBuilder.
+- Operaciones JDBC/JPA fuera del Event Dispatch Thread.
+- Transacciones manejadas en Java (`commit`/`rollback`).
 
-### Ejecución
+## Preparación
 
-Desde el subdirectorio `app`:
+1. Instale JDK 17, Maven 3.9+ y MySQL 8.
+2. Cree el esquema utilizando `app/database/schema/visor_cfdi_mysql8_schema_v1.sql`; **no lo reejecute sobre una instalación con datos**.
+3. Configure un usuario de MySQL con permisos adecuados sobre `visor_cfdi` y privilegios mínimos de aplicación.
+4. Ejecute desde la carpeta `app`:
 
-    mvn clean test
-    mvn exec:java
+   ```bash
+   mvn clean verify
+   mvn exec:java
+   ```
 
-El punto de entrada es `com.kathsoft.visor.App`. El formulario se abre automáticamente. En Eclipse, importe `app` como **Existing Maven Project**, instale WindowBuilder y abra `Fr_ConfiguracionInicial.java` con **Open With > WindowBuilder Editor**. No es necesario tener MySQL en ejecución para abrir la vista previa del diseñador.
+5. En la primera ejecución, registre el servidor MySQL, compruebe su conexión y elija la carpeta de XML.
+6. Introduzca la contraseña MySQL al iniciar. Hibernate valida el esquema pero no lo modifica.
+7. Registre el **primer administrador**. No existe cuenta administrativa predeterminada.
+8. Inicie sesión usando el usuario y la contraseña de aplicación recién creados.
+9. Abra **Administración de usuarios** para crear las demás cuentas.
 
-### Configuración de MySQL
+Si la configuración de RF-001 ya existe, la aplicación comienza directamente solicitando la contraseña MySQL; no vuelve a pedir la carpeta de XML.
 
-El formulario comprueba la conexión con una base de datos que ya debe existir. Para un entorno local de desarrollo puede crearse con:
+## Importación en Eclipse y WindowBuilder
 
-    CREATE DATABASE visor_cfdi
-      CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+Importe `app` como **Existing Maven Project**. Los formularios editables desde WindowBuilder están en
+`com.kathsoft.visor.app.view.configuracion` y `com.kathsoft.visor.app.view.usuario`.
 
-Utilice un usuario MySQL propio con permisos adecuados; no es recomendable usar `root` para ejecutar la aplicación.
+Abra el archivo Java con **Open With → WindowBuilder Editor → Design**. El constructor sin parámetros de cada vista no debe consultar MySQL, leer el disco ni inicializar Hibernate. GroupLayout está declarado explícitamente y FlatLaf solo se configura en `App.main`, fuera de los constructores.
 
-El formulario **no crea tablas ni modifica el esquema**. No guarda la contraseña en disco: solicita una contraseña al realizar la prueba o guardar la configuración. Las credenciales de operación y la sesión de usuario se integrarán en módulos posteriores.
+## Pruebas
 
-### Ubicaciones locales
+`mvn test` ejecuta pruebas unitarias; `mvn verify` ejecuta además `UsuariosServiceIT` mediante Testcontainers con `mysql:8.0.46`. La integración importa el SQL completo del repositorio en un contenedor desechable y **no requiere ni modifica la base de desarrollo**. Necesita Docker disponible.
 
-- Configuración: `~/.visor-cfdi-xml/config.properties` (en Windows, dentro de la carpeta principal del usuario).
-- Repositorio documental predeterminado: `~/VisorCFDI/xml/`.
-- Se guarda la ruta del repositorio, no archivos XML ni contraseñas en MySQL.
-- El directorio documental es independiente de los ejercicios y periodos fiscales de cada CFDI.
+## Restricciones conocidas
 
-La carpeta de documentos puede estar dentro de una ruta sincronizada por el usuario. **Aún no existe integración con Dropbox, MEGA ni buckets**; esa funcionalidad tendrá un proveedor documental separado en una etapa posterior.
+- RF-003 incorporará permisos granulares y acceso por contribuyente; `ADMIN`/`CONSULTA` son roles iniciales, no la implementación final del módulo de autorización.
+- Sin mecanismo de bloqueo temporizado por intentos fallidos ni segundo factor. Se requiere endurecimiento adicional antes de distribuir a usuarios externos.
+- La aplicación usa un cliente Swing con conexión directa a MySQL; las comprobaciones de roles en Java **no reemplazan permisos de MySQL ni constituyen autorización a prueba de un usuario con acceso directo a la BD**. Para despliegues multiusuario a través de Internet debe evaluarse un servicio intermedio.
+- Las operaciones de importación masiva, conciliación, reportes y descarga SAT permanecen fuera del alcance RF-002.
+- Aún requiere comprobación manual del diseñador WindowBuilder y de la UI en Windows/Linux.
+- Integraciones remotas de archivos (buckets, MEGA, Dropbox) son futuras.
 
-### Seguridad de conexión
+## Arquitectura y decisiones
 
-Para `localhost`, `127.0.0.1` y loopback IPv6 la URL JDBC utiliza conexión local sin TLS. Para un host remoto se exige TLS con `VERIFY_IDENTITY`, por lo que el servidor debe presentar un certificado válido reconocido por el entorno Java.
-
-### Estructura del módulo
-
-- `app/model/configuracion/`: modelo validado de configuración.
-- `app/service/configuracion/`: lectura/escritura local y comprobación MySQL.
-- `app/view/configuracion/`: formulario Swing compatible con WindowBuilder.
-
-## Desarrollo incremental
-
-El siguiente módulo previsto es RF-002, registro e inicio de sesión de usuarios. La configuración de RF-001 es un primer paso y no debe interpretarse como un sistema de facturación o cumplimiento fiscal terminado.
+Ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) y [docs/RF-002.md](docs/RF-002.md). Hibernate/JPA gestiona las operaciones ordinarias; las operaciones masivas podrán usar JDBC con procedimientos almacenados sobre la **misma conexión y transacción** que la unidad de trabajo Java.

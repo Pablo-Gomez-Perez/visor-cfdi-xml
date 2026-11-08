@@ -55,7 +55,7 @@ public class ConexionMySqlService {
      * @param datos configuración validada
      * @return URL JDBC lista para el driver MySQL
      */
-    String construirUrl(ConfiguracionSistema datos) {
+    public String construirUrl(ConfiguracionSistema datos) {
         String host = datos.host();
         boolean local = "localhost".equalsIgnoreCase(host)
                 || "127.0.0.1".equals(host)
