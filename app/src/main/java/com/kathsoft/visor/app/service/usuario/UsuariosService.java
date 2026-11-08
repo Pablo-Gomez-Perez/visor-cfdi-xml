@@ -174,22 +174,50 @@ public final class UsuariosService {
     }
 
     /**
-     * Edita el nombre y correo, preservando login, roles y clave.
+     * Actualiza los datos de acceso y contacto de una cuenta.
      *
-     * @param administradorId administrador autenticado
-     * @param usuarioId usuario objetivo
-     * @param nombre nuevo nombre
-     * @param correo nuevo correo, opcional
+     * <p>El identificador permanente es `usuario.id`, por lo que cambiar el
+     * login no altera las relaciones con otras tablas. La unicidad del login
+     * está protegida por el índice `uk_usuario_login` de MySQL y se verifica
+     * anticipadamente para proporcionar un mensaje claro. El mismo commit
+     * confirma tanto los datos como su evento de auditoría.</p>
+     *
+     * @param administradorId cuenta administradora autenticada
+     * @param usuarioId identificador de la cuenta modificada
+     * @param nombre nuevo nombre completo
+     * @param login nuevo identificador de acceso
+     * @param correo nuevo correo, o null/vacío para eliminarlo
+     * @throws IllegalArgumentException si los valores no son válidos o el login ya existe
+     * @throws SecurityException si el operador no es administrador activo
      */
-    public void modificarDatos(Long administradorId, Long usuarioId, String nombre, String correo) {
+    public void modificarDatos(Long administradorId, Long usuarioId,
+            String nombre, String login, String correo) {
         String nuevoNombre = nombreNormalizado(nombre);
+        String nuevoLogin = loginNormalizado(login);
         String nuevoCorreo = correoNormalizado(correo);
         jpa.enTransaccion(em -> {
             asegurarAdministrador(em, administradorId);
             UsuarioEntity usuario = buscarUsuario(em, usuarioId);
+            String loginAnterior = usuario.getLogin();
+            Long duplicados = em.createQuery(
+                    "select count(u) from UsuarioEntity u "
+                            + "where u.login = :login and u.id <> :id", Long.class)
+                    .setParameter("login", nuevoLogin)
+                    .setParameter("id", usuarioId)
+                    .getSingleResult();
+            if (duplicados > 0) {
+                throw new IllegalArgumentException("El nombre de usuario ya está registrado");
+            }
+
             usuario.setNombreCompleto(nuevoNombre);
+            usuario.setLogin(nuevoLogin);
             usuario.setCorreo(nuevoCorreo);
-            registrarEvento(em, administradorId, usuarioId, "MODIFICAR");
+            em.flush();
+
+            String motivo = loginAnterior.equals(nuevoLogin)
+                    ? "Modificación de datos de usuario"
+                    : "Login modificado de '" + loginAnterior + "' a '" + nuevoLogin + "'";
+            registrarEvento(em, administradorId, usuarioId, "MODIFICAR", motivo);
             return null;
         });
     }
@@ -265,8 +293,22 @@ public final class UsuariosService {
 
     private static UsuarioEntity nuevoUsuario(SolicitudUsuario s, String hash) {
         return new UsuarioEntity(nombreNormalizado(s.nombre()),
-                s.login().strip().toLowerCase(Locale.ROOT),
+                loginNormalizado(s.login()),
                 correoNormalizado(s.correo()), hash);
+    }
+
+    /**
+     * Aplica a las altas y modificaciones la misma regla de login.
+     *
+     * @param login nombre de acceso introducido por el operador
+     * @return valor recortado y normalizado a minúsculas
+     */
+    private static String loginNormalizado(String login) {
+        if (login == null || !login.strip().matches("[A-Za-z0-9._-]{3,80}")) {
+            throw new IllegalArgumentException(
+                    "El usuario debe contener 3-80 caracteres alfanuméricos, . _ o -");
+        }
+        return login.strip().toLowerCase(Locale.ROOT);
     }
 
     private static String nombreNormalizado(String nombre) {
@@ -292,9 +334,7 @@ public final class UsuariosService {
             throw new IllegalArgumentException("La solicitud es obligatoria");
         }
         nombreNormalizado(s.nombre());
-        if (s.login() == null || !s.login().strip().matches("[A-Za-z0-9._-]{3,80}")) {
-            throw new IllegalArgumentException("El usuario debe contener 3-80 caracteres alfanuméricos, . _ o -");
-        }
+        loginNormalizado(s.login());
         correoNormalizado(s.correo());
         validarRol(s.rol());
     }
@@ -371,8 +411,13 @@ public final class UsuariosService {
     }
 
     private static void registrarEvento(EntityManager em, Long operador, Long objetivo, String accion) {
-        em.persist(new BitacoraEventoEntity(operador, "usuario", objetivo, accion,
-                "Operación administrativa sobre cuenta de usuario"));
+        registrarEvento(em, operador, objetivo, accion,
+                "Operación administrativa sobre cuenta de usuario");
+    }
+
+    private static void registrarEvento(EntityManager em, Long operador,
+            Long objetivo, String accion, String motivo) {
+        em.persist(new BitacoraEventoEntity(operador, "usuario", objetivo, accion, motivo));
     }
 
     private static UsuarioSesion sesion(UsuarioEntity u) {

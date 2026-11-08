@@ -88,6 +88,14 @@ public class UsuarioEntity {
     public Set<RolEntity> getRoles() { return roles; }
 
     public void setNombreCompleto(String nombreCompleto) { this.nombreCompleto = nombreCompleto; }
+
+    /**
+     * Actualiza el identificador de acceso. Su validación y unicidad se
+     * controlan desde UsuariosService y mediante el índice único MySQL.
+     *
+     * @param login nuevo nombre de acceso normalizado
+     */
+    public void setLogin(String login) { this.login = login; }
     public void setCorreo(String correo) { this.correo = correo; }
     public void setHashContrasena(String hashContrasena) { this.hashContrasena = hashContrasena; }
     public void setEstado(UsuarioEstado estado) { this.estado = estado; }

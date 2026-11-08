@@ -95,12 +95,58 @@ class UsuariosServiceIT {
                     new SolicitudUsuario("Invalido", "invalido", null, "CONSULTA"),
                     "contraDeAuxiliar#2026".toCharArray()));
 
-            usuarios.modificarDatos(admin.id(), auxiliarId, "Auxiliar editado", "nuevo@ejemplo.test");
-            usuarios.cambiarContrasena(admin.id(), auxiliarId, "otraClaveSegura#2026".toCharArray());
+            // RF-002: el login es modificable, se normaliza y mantiene su PK.
+            usuarios.modificarDatos(admin.id(), auxiliarId, "Auxiliar editado",
+                    "  AUXILIAR.RENOMBRADO  ", "nuevo@ejemplo.test");
+            var modificado = usuarios.listar(admin.id()).stream()
+                    .filter(u -> u.id().equals(auxiliarId)).findFirst().orElseThrow();
+            assertEquals("auxiliar.renombrado", modificado.login());
+            assertEquals("Auxiliar editado", modificado.nombre());
+            assertEquals("nuevo@ejemplo.test", modificado.correo());
             assertThrows(SecurityException.class, () ->
                     usuarios.autenticar("auxiliar1", "contraDeAuxiliar#2026".toCharArray()));
+            assertEquals(auxiliarId, usuarios.autenticar(
+                    "AUXILIAR.RENOMBRADO", "contraDeAuxiliar#2026".toCharArray()).id());
+
+            // Un login duplicado se rechaza sin modificar nombre ni correo.
+            assertThrows(IllegalArgumentException.class, () ->
+                    usuarios.modificarDatos(admin.id(), auxiliarId, "Cambio indebido",
+                            "ADMIN01", "duplicado@ejemplo.test"));
+            assertThrows(IllegalArgumentException.class, () ->
+                    usuarios.modificarDatos(admin.id(), auxiliarId, "Cambio indebido",
+                            "usuario con espacios", "incorrecto@ejemplo.test"));
+            assertThrows(IllegalArgumentException.class, () ->
+                    usuarios.modificarDatos(admin.id(), auxiliarId, "Cambio indebido",
+                            "otro.login", "correo-invalido"));
+            var conservado = usuarios.listar(admin.id()).stream()
+                    .filter(u -> u.id().equals(auxiliarId)).findFirst().orElseThrow();
+            assertEquals("auxiliar.renombrado", conservado.login());
+            assertEquals("Auxiliar editado", conservado.nombre());
+            assertEquals("nuevo@ejemplo.test", conservado.correo());
+
+            // Un usuario CONSULTA tampoco puede modificar el login de un ADMIN.
+            assertThrows(SecurityException.class, () ->
+                    usuarios.modificarDatos(auxiliarId, admin.id(),
+                            "Admin", "admin.cambiado", null));
+
+            // Editar con el mismo login no debe interpretarse como duplicado.
+            usuarios.modificarDatos(admin.id(), auxiliarId, "Auxiliar editado",
+                    "AUXILIAR.RENOMBRADO", "nuevo@ejemplo.test");
+
+            String auditoria = jpa.consultar(em -> (String) em.createNativeQuery(
+                    "SELECT motivo FROM bitacora_evento "
+                    + "WHERE entidad = 'usuario' AND entidad_id = :id "
+                    + "AND accion = 'MODIFICAR' AND motivo LIKE 'Login modificado%' "
+                    + "ORDER BY id DESC LIMIT 1")
+                    .setParameter("id", auxiliarId).getSingleResult());
+            assertTrue(auditoria.contains("auxiliar1"));
+            assertTrue(auditoria.contains("auxiliar.renombrado"));
+
+            usuarios.cambiarContrasena(admin.id(), auxiliarId, "otraClaveSegura#2026".toCharArray());
+            assertThrows(SecurityException.class, () ->
+                    usuarios.autenticar("auxiliar.renombrado", "contraDeAuxiliar#2026".toCharArray()));
             assertEquals(auxiliarId,
-                    usuarios.autenticar("auxiliar1", "otraClaveSegura#2026".toCharArray()).id());
+                    usuarios.autenticar("auxiliar.renombrado", "otraClaveSegura#2026".toCharArray()).id());
 
             usuarios.cambiarRol(admin.id(), auxiliarId, "ADMIN");
             usuarios.cambiarEstado(admin.id(), admin.id(), UsuarioEstado.INACTIVO);
