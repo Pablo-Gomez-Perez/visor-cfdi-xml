@@ -12,7 +12,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
-import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.border.EmptyBorder;
@@ -191,32 +190,25 @@ public class Fr_Usuarios extends JFrame {
         worker.execute();
     }
 
+    /**
+     * Abre un formulario editable en Eclipse WindowBuilder para los tres
+     * atributos de cuenta autorizados: nombre, login y correo.
+     */
     private void editar() {
         Long id = idSeleccionado();
-        if (id == null) return;
-        int fila = tableUsuarios.convertRowIndexToModel(tableUsuarios.getSelectedRow());
-        JTextField nombre = new JTextField((String) modelUsuarios.getValueAt(fila, 1), 25);
-        String original = (String) modelUsuarios.getValueAt(fila, 3);
-        JTextField correo = new JTextField(original == null ? "" : original, 25);
-        JPanel formulario = new JPanel();
-        JLabel lblNombre = new JLabel("Nombre completo");
-        JLabel lblCorreo = new JLabel("Correo");
-        GroupLayout gl = new GroupLayout(formulario);
-        formulario.setLayout(gl);
-        gl.setAutoCreateGaps(true);
-        gl.setAutoCreateContainerGaps(true);
-        gl.setHorizontalGroup(gl.createSequentialGroup()
-            .addGroup(gl.createParallelGroup().addComponent(lblNombre).addComponent(lblCorreo))
-            .addGroup(gl.createParallelGroup().addComponent(nombre).addComponent(correo)));
-        gl.setVerticalGroup(gl.createSequentialGroup()
-            .addGroup(gl.createParallelGroup(GroupLayout.Alignment.BASELINE)
-                .addComponent(lblNombre).addComponent(nombre))
-            .addGroup(gl.createParallelGroup(GroupLayout.Alignment.BASELINE)
-                .addComponent(lblCorreo).addComponent(correo)));
-        if (JOptionPane.showConfirmDialog(this, formulario, "Modificar usuario",
-                JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION) {
-            ejecutarOperacion(() -> usuarios.modificarDatos(sesion.id(), id, nombre.getText(), correo.getText()));
+        if (id == null || usuarios == null || sesion == null) {
+            return;
         }
+        int fila = tableUsuarios.convertRowIndexToModel(tableUsuarios.getSelectedRow());
+        UsuarioListado seleccionado = new UsuarioListado(
+                id,
+                (String) modelUsuarios.getValueAt(fila, 1),
+                (String) modelUsuarios.getValueAt(fila, 2),
+                (String) modelUsuarios.getValueAt(fila, 3),
+                (String) modelUsuarios.getValueAt(fila, 4),
+                (String) modelUsuarios.getValueAt(fila, 5));
+        new Fr_EditarUsuario(this, usuarios, sesion, seleccionado, this::recargar)
+                .setVisible(true);
     }
 
     private void cambiarEstado() {

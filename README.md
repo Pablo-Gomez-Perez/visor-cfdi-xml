@@ -22,7 +22,7 @@ Java SE 17, Maven, Swing, Eclipse WindowBuilder, GroupLayout, FlatLaf, Hibernate
 - Alta inicial del primer administrador, solo si no existen cuentas.
 - Roles iniciales idempotentes `ADMIN` y `CONSULTA`.
 - Autenticación con contraseña de la **aplicación**, independiente de MySQL.
-- Administración por ADMIN: listar, crear, editar nombre y correo, activar/desactivar, cambiar rol básico y restablecer contraseña.
+- Administración por ADMIN: listar, crear, editar nombre completo, **login** y correo, activar/desactivar, cambiar rol básico y restablecer contraseña.
 - Protección contra desactivar o degradar al último administrador activo.
 - Registro de eventos administrativos en `bitacora_evento`.
 - Contraseñas con PBKDF2-HMAC-SHA256, sal individual y 600 000 iteraciones.
