@@ -64,6 +64,7 @@ public class Fr_ConexionMySql extends JFrame {
         if (configuracion != null) {
             lblServidor.setText("Servidor: " + configuracion.host()
                     + " / " + configuracion.baseDatos());
+            mostrarModoAutomatico();
             SwingUtilities.invokeLater(this::iniciarAutomaticamente);
         }
     }
@@ -122,7 +123,8 @@ public class Fr_ConexionMySql extends JFrame {
                     .addComponent(btnCambiarClave)
                     .addComponent(btnConectar)));
         getRootPane().setDefaultButton(btnConectar);
-        mostrarModoAutomatico();
+        // El constructor sin argumentos muestra todos los campos en Design.
+        // La ocultación de la contraseña ocurre solo con configuración real.
     }
 
     /**
