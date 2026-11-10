@@ -32,6 +32,18 @@ Java SE 17, Maven, Swing, Eclipse WindowBuilder, GroupLayout, FlatLaf, Hibernate
 - Operaciones JDBC/JPA fuera del Event Dispatch Thread.
 - Transacciones manejadas en Java (`commit`/`rollback`).
 
+### RF-003 — Roles y permisos
+- Catálogo configurable de roles en `PanelRoles`, integrado al `CardLayout` principal.
+- Diálogo `Fr_DatosRol` compartido para crear y modificar roles.
+- Diálogo `Fr_PermisosRol`: matriz de `JTable` con casillas Boolean/JCheckBox por privilegio.
+- Persistencia de privilegios mediante Hibernate/JPA en `rol_permiso`, sin alterar el esquema.
+- Autorización por acción evaluada en cada servicio contra permisos efectivos; no basta con pertenecer a ADMIN.
+- Roles personalizados sin permisos por defecto; el administrador puede asignarlos desde la aplicación.
+- ADMIN conserva de forma obligatoria el permiso de recuperación de roles; cambio de rol a ADMIN exige autorización adicional.
+- Acciones de roles auditadas y transaccionales.
+
+**Guía y criterios de aceptación:** [docs/RF-003.md](docs/RF-003.md).
+
 ## Preparación
 
 1. Instale JDK 17, Maven 3.9+ y MySQL 8.
@@ -48,7 +60,8 @@ Java SE 17, Maven, Swing, Eclipse WindowBuilder, GroupLayout, FlatLaf, Hibernate
 6. En la primera configuración, introduzca la contraseña MySQL y pulse **Guardar configuración**. La aplicación verifica la conexión y la guarda cifrada. En los siguientes arranques se conecta automáticamente; Hibernate valida el esquema pero no lo modifica.
 7. Registre el **primer administrador**. No existe cuenta administrativa predeterminada.
 8. Inicie sesión usando el usuario y la contraseña de aplicación recién creados.
-9. En la ventana principal, elija **Administración → Administrar usuarios**. El catálogo aparece en el área central, sin abrir otro JFrame.
+9. En la ventana principal, elija **Administración → Administrar usuarios** o **Administración → Roles y permisos**. Ambos catálogos aparecen en el área central mediante CardLayout, sin abrir otro JFrame.
+10. En **Roles y permisos**, cree un rol, selecciónelo y pulse **Configurar privilegios** para marcar o desmarcar cada permiso. Después, asigne el rol desde Administración de usuarios.
 
 **Migración de instalaciones existentes:** si ya existe `config.properties` de RF-001, pero no se habían guardado credenciales cifradas, la aplicación solicitará la contraseña MySQL **una sola vez** mediante «Guardar y conectar». Solo se guarda después de conectar correctamente; en las siguientes ejecuciones pasa al inicio de sesión de la aplicación sin solicitar la clave de MySQL.
 

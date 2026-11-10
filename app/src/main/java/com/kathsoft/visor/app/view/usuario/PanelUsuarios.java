@@ -7,6 +7,7 @@ import java.awt.Frame;
 import java.awt.Window;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
@@ -31,6 +32,7 @@ import com.kathsoft.visor.app.model.dto.UsuarioListado;
 import com.kathsoft.visor.app.model.dto.UsuarioSesion;
 import com.kathsoft.visor.app.model.entity.UsuarioEstado;
 import com.kathsoft.visor.app.service.usuario.UsuariosService;
+import com.kathsoft.visor.app.security.Permisos;
 
 /**
  * Vista principal del catálogo de usuarios, incrustada en el CardLayout de
@@ -46,6 +48,7 @@ public class PanelUsuarios extends JPanel {
 
     private UsuariosService usuarios;
     private UsuarioSesion sesion;
+    private Set<String> privilegios = Set.of();
 
     private boolean consultaActiva;
     private boolean recargaPendiente;
@@ -86,16 +89,12 @@ public class PanelUsuarios extends JPanel {
      * @param usuarios servicio transaccional del módulo
      * @param sesion cuenta autenticada
      */
-    public void configurar(UsuariosService usuarios, UsuarioSesion sesion) {
+    public void configurar(UsuariosService usuarios, UsuarioSesion sesion,
+            Set<String> privilegios) {
         this.usuarios = usuarios;
         this.sesion = sesion;
-        boolean administrador = sesion != null && sesion.esAdministrador();
-        btnAgregar.setEnabled(administrador);
-        btnModificar.setEnabled(administrador);
-        btnEstado.setEnabled(administrador);
-        btnRol.setEnabled(administrador);
-        btnContrasena.setEnabled(administrador);
-        btnActualizar.setEnabled(administrador);
+        this.privilegios = privilegios == null ? Set.of() : Set.copyOf(privilegios);
+        establecerOcupado(false);
     }
 
     private void inicializarComponentes() {
@@ -245,7 +244,7 @@ public class PanelUsuarios extends JPanel {
             filtrar();
         });
         btnActualizar.addActionListener(e -> recargar());
-        configurar(null, null);
+        configurar(null, null, Set.of());
     }
 
     /**
@@ -253,7 +252,8 @@ public class PanelUsuarios extends JPanel {
      * Debe llamarse al entrar en la tarjeta desde el JMenuItem.
      */
     public void recargar() {
-        if (usuarios == null || sesion == null || !sesion.esAdministrador()) {
+        if (usuarios == null || sesion == null
+                || !privilegios.contains(Permisos.USUARIOS_CONSULTAR)) {
             return;
         }
         if (consultaActiva) {
@@ -337,11 +337,43 @@ public class PanelUsuarios extends JPanel {
     }
 
     private void abrirDetalle(UsuarioListado seleccionado) {
-        if (usuarios != null && sesion != null && sesion.esAdministrador()) {
-            Fr_DatosUsuario dialogo = new Fr_DatosUsuario(
-                    obtenerVentana(), usuarios, sesion, seleccionado, this::recargar);
-            dialogo.setVisible(true);
+        if (usuarios == null || sesion == null) {
+            return;
         }
+        if (seleccionado != null) {
+            new Fr_DatosUsuario(obtenerVentana(), usuarios, sesion, seleccionado,
+                    this::recargar, List.of()).setVisible(true);
+            return;
+        }
+        // Los roles pueden crecer desde RF-003: cargar opciones reales.
+        establecerOcupado(true);
+        SwingWorker<List<String>, Void> tarea = new SwingWorker<>() {
+            @Override
+            protected List<String> doInBackground() {
+                return usuarios.listarClavesRoles(sesion.id());
+            }
+            @Override
+            protected void done() {
+                try {
+                    List<String> claves = get();
+                    if (claves.isEmpty()) {
+                        throw new IllegalStateException("No existen roles disponibles");
+                    }
+                    new Fr_DatosUsuario(obtenerVentana(), usuarios, sesion, null,
+                            PanelUsuarios.this::recargar, claves).setVisible(true);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException ex) {
+                    mostrarError(ex);
+                } catch (RuntimeException ex) {
+                    JOptionPane.showMessageDialog(PanelUsuarios.this, ex.getMessage(),
+                            "Error de roles", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    establecerOcupado(false);
+                }
+            }
+        };
+        tarea.execute();
     }
 
     private void cambiarEstado() {
@@ -361,17 +393,43 @@ public class PanelUsuarios extends JPanel {
 
     private void cambiarRol() {
         UsuarioListado usuario = registroSeleccionado();
-        if (usuario == null) {
+        if (usuario == null || usuarios == null || sesion == null) {
             return;
         }
-        String rol = (String) JOptionPane.showInputDialog(this,
-                "Seleccione el rol de " + usuario.login(), "Cambiar rol",
-                JOptionPane.QUESTION_MESSAGE, null,
-                new String[] {UsuariosService.ADMIN, UsuariosService.CONSULTA},
-                UsuariosService.CONSULTA);
-        if (rol != null) {
-            ejecutarOperacion(() -> usuarios.cambiarRol(sesion.id(), usuario.id(), rol));
-        }
+        establecerOcupado(true);
+        SwingWorker<List<String>, Void> tarea = new SwingWorker<>() {
+            @Override
+            protected List<String> doInBackground() {
+                return usuarios.listarClavesRoles(sesion.id());
+            }
+            @Override
+            protected void done() {
+                boolean operacionIniciada = false;
+                try {
+                    List<String> disponibles = get();
+                    String rol = (String) JOptionPane.showInputDialog(
+                            PanelUsuarios.this,
+                            "Seleccione el rol de " + usuario.login(),
+                            "Cambiar rol", JOptionPane.QUESTION_MESSAGE, null,
+                            disponibles.toArray(new String[0]),
+                            disponibles.isEmpty() ? null : disponibles.get(0));
+                    if (rol != null) {
+                        ejecutarOperacion(() ->
+                                usuarios.cambiarRol(sesion.id(), usuario.id(), rol));
+                        operacionIniciada = true;
+                    }
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException ex) {
+                    mostrarError(ex);
+                } finally {
+                    if (!operacionIniciada) {
+                        establecerOcupado(false);
+                    }
+                }
+            }
+        };
+        tarea.execute();
     }
 
     private void restablecerClave() {
@@ -427,13 +485,13 @@ public class PanelUsuarios extends JPanel {
     }
 
     private void establecerOcupado(boolean ocupado) {
-        boolean disponible = !ocupado && sesion != null && sesion.esAdministrador();
-        btnAgregar.setEnabled(disponible);
-        btnModificar.setEnabled(disponible);
-        btnEstado.setEnabled(disponible);
-        btnRol.setEnabled(disponible);
-        btnContrasena.setEnabled(disponible);
-        btnActualizar.setEnabled(disponible);
+        boolean disponible = !ocupado && sesion != null;
+        btnAgregar.setEnabled(disponible && privilegios.contains(Permisos.USUARIOS_CREAR));
+        btnModificar.setEnabled(disponible && privilegios.contains(Permisos.USUARIOS_MODIFICAR));
+        btnEstado.setEnabled(disponible && privilegios.contains(Permisos.USUARIOS_CAMBIAR_ESTADO));
+        btnRol.setEnabled(disponible && privilegios.contains(Permisos.USUARIOS_ASIGNAR_ROL));
+        btnContrasena.setEnabled(disponible && privilegios.contains(Permisos.USUARIOS_RESTABLECER_CLAVE));
+        btnActualizar.setEnabled(disponible && privilegios.contains(Permisos.USUARIOS_CONSULTAR));
     }
 
     private void mostrarError(ExecutionException ex) {

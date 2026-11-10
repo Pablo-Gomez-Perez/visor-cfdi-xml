@@ -4,6 +4,8 @@ import java.awt.CardLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import javax.swing.GroupLayout;
 import javax.swing.JButton;
@@ -12,29 +14,36 @@ import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.border.EmptyBorder;
 
 import com.kathsoft.visor.app.model.dto.UsuarioSesion;
+import com.kathsoft.visor.app.security.Permisos;
+import com.kathsoft.visor.app.service.rol.RolesService;
 import com.kathsoft.visor.app.service.usuario.UsuariosService;
+import com.kathsoft.visor.app.view.rol.PanelRoles;
 import com.kathsoft.visor.app.view.usuario.Fr_Login;
 import com.kathsoft.visor.app.view.usuario.PanelUsuarios;
 
 /**
- * Ventana principal del programa: JMenuBar, accesos rápidos y un solo
- * contenedor CardLayout para los módulos de listado y consulta.
+ * Ventana principal: un JFrame con JMenuBar, accesos rápidos y CardLayout.
  *
- * <p>Reproduce el patrón de Fr_principal de Kath ERP sin abrir JFrames para
- * listados. El constructor sin argumentos no consulta servicios ni MySQL
- * y permite editar la ventana mediante Eclipse WindowBuilder.</p>
+ * <p>Los módulos RF-002 y RF-003 son paneles independientes editables desde
+ * WindowBuilder, con GroupLayout. La autorización del menú es indicativa:
+ * los servicios siempre vuelven a comprobar permisos en MySQL.</p>
  */
 public class Fr_Principal extends JFrame {
 
     private static final long serialVersionUID = 1L;
     private static final String CARD_INICIO = "panelInicio";
     private static final String CARD_USUARIOS = "panelUsuarios";
+    private static final String CARD_ROLES = "panelRoles";
 
     private UsuariosService usuarios;
+    private RolesService roles;
     private UsuarioSesion sesion;
 
     private JMenuBar barraMenu;
@@ -44,8 +53,10 @@ public class Fr_Principal extends JFrame {
     private JMenu menuSesion;
     private JMenuItem opcionInicio;
     private JMenuItem opcionUsuarios;
+    private JMenuItem opcionRoles;
     private JMenuItem opcionAdministrarXml;
     private JMenuItem opcionCargarXml;
+    private JMenuItem opcionActualizarPermisos;
     private JMenuItem opcionCerrarSesion;
     private JMenuItem opcionSalir;
 
@@ -55,6 +66,7 @@ public class Fr_Principal extends JFrame {
     private JPanel panelEstado;
     private PanelInicio panelInicio;
     private PanelUsuarios panelUsuarios;
+    private PanelRoles panelRoles;
     private JButton btnInicio;
     private JButton btnAdministrarXml;
     private JButton btnCargarXml;
@@ -62,28 +74,27 @@ public class Fr_Principal extends JFrame {
     private CardLayout cardLayout;
 
     /**
-     * Construye exclusivamente la interfaz visual para WindowBuilder.
+     * Constructor vacío; únicamente crea Swing para Eclipse WindowBuilder.
      */
     public Fr_Principal() {
         inicializarComponentes();
     }
 
     /**
-     * Inicia la navegación de la aplicación con un usuario autenticado.
+     * Inicializa una sesión; permisos efectivos se consultan en SwingWorker.
      *
      * @param usuarios servicio de usuarios
-     * @param sesion identidad autenticada de la aplicación
+     * @param sesion identidad autenticada
      */
     public Fr_Principal(UsuariosService usuarios, UsuarioSesion sesion) {
         this();
         this.usuarios = usuarios;
+        this.roles = usuarios == null ? null : usuarios.roles();
         this.sesion = sesion;
         if (sesion != null) {
             lblEstadoSesion.setText("Sesión: " + sesion.nombre() + " (" + sesion.login() + ")");
-            boolean admin = sesion.esAdministrador();
-            opcionUsuarios.setEnabled(admin);
-            panelUsuarios.configurar(usuarios, sesion);
         }
+        SwingUtilities.invokeLater(() -> actualizarPermisos(null));
     }
 
     private void inicializarComponentes() {
@@ -107,7 +118,11 @@ public class Fr_Principal extends JFrame {
         opcionUsuarios = new JMenuItem("Administrar usuarios");
         opcionUsuarios.setEnabled(false);
         menuAdministracion.add(opcionUsuarios);
-        opcionUsuarios.addActionListener(e -> mostrarUsuarios());
+        opcionUsuarios.addActionListener(e -> actualizarPermisos(CARD_USUARIOS));
+        opcionRoles = new JMenuItem("Roles y permisos");
+        opcionRoles.setEnabled(false);
+        menuAdministracion.add(opcionRoles);
+        opcionRoles.addActionListener(e -> actualizarPermisos(CARD_ROLES));
 
         menuCfdi = new JMenu("CFDI");
         barraMenu.add(menuCfdi);
@@ -122,6 +137,9 @@ public class Fr_Principal extends JFrame {
 
         menuSesion = new JMenu("Sesión");
         barraMenu.add(menuSesion);
+        opcionActualizarPermisos = new JMenuItem("Actualizar accesos");
+        opcionActualizarPermisos.addActionListener(e -> actualizarPermisos(null));
+        menuSesion.add(opcionActualizarPermisos);
         opcionCerrarSesion = new JMenuItem("Cerrar sesión");
         opcionCerrarSesion.addActionListener(e -> cerrarSesion());
         menuSesion.add(opcionCerrarSesion);
@@ -150,10 +168,13 @@ public class Fr_Principal extends JFrame {
         panelPrincipalContenedor = new JPanel();
         cardLayout = new CardLayout(0, 0);
         panelPrincipalContenedor.setLayout(cardLayout);
+
         panelInicio = new PanelInicio();
         panelPrincipalContenedor.add(panelInicio, CARD_INICIO);
         panelUsuarios = new PanelUsuarios();
         panelPrincipalContenedor.add(panelUsuarios, CARD_USUARIOS);
+        panelRoles = new PanelRoles();
+        panelPrincipalContenedor.add(panelRoles, CARD_ROLES);
         cardLayout.show(panelPrincipalContenedor, CARD_INICIO);
 
         panelEstado = new JPanel();
@@ -183,33 +204,83 @@ public class Fr_Principal extends JFrame {
                         GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE));
     }
 
-    /**
-     * Muestra la vista principal sin generar nuevas ventanas.
-     */
+    /** Muestra Inicio sin crear otra ventana. */
     private void mostrarInicio() {
         cardLayout.show(panelPrincipalContenedor, CARD_INICIO);
-    }
-
-    /**
-     * Muestra el catálogo de usuarios dentro de CardLayout y actualiza datos.
-     */
-    private void mostrarUsuarios() {
-        if (sesion != null && sesion.esAdministrador() && usuarios != null) {
-            cardLayout.show(panelPrincipalContenedor, CARD_USUARIOS);
-            panelUsuarios.recargar();
+        if (usuarios != null) {
+            actualizarPermisos(null);
         }
     }
 
     /**
-     * Cierra solo la sesión de la aplicación conservando la conexión MySQL.
+     * Reconsulta los privilegios efectivos sin bloquear Swing y reconfigura
+     * ambos paneles. El backend los valida nuevamente en cada operación.
+     *
+     * @param destino tarjeta requerida, o null para solo refrescar menús
+     */
+    private void actualizarPermisos(String destino) {
+        if (sesion == null || usuarios == null || roles == null) {
+            return;
+        }
+        opcionActualizarPermisos.setEnabled(false);
+        SwingWorker<Set<String>, Void> tarea = new SwingWorker<>() {
+            @Override
+            protected Set<String> doInBackground() {
+                return usuarios.permisosDe(sesion.id());
+            }
+            @Override
+            protected void done() {
+                try {
+                    Set<String> permisos = get();
+                    boolean verUsuarios = permisos.contains(Permisos.USUARIOS_CONSULTAR);
+                    boolean verRoles = permisos.stream().anyMatch(p -> p.startsWith("ROLES."));
+                    opcionUsuarios.setEnabled(verUsuarios);
+                    opcionRoles.setEnabled(verRoles);
+                    panelUsuarios.configurar(usuarios, sesion, permisos);
+                    panelRoles.configurar(roles, sesion, permisos);
+                    if (CARD_USUARIOS.equals(destino)) {
+                        if (verUsuarios) {
+                            cardLayout.show(panelPrincipalContenedor, CARD_USUARIOS);
+                            panelUsuarios.recargar();
+                        } else {
+                            JOptionPane.showMessageDialog(Fr_Principal.this,
+                                    "No tiene permiso para consultar usuarios.");
+                        }
+                    } else if (CARD_ROLES.equals(destino)) {
+                        if (verRoles) {
+                            cardLayout.show(panelPrincipalContenedor, CARD_ROLES);
+                            panelRoles.recargar();
+                        } else {
+                            JOptionPane.showMessageDialog(Fr_Principal.this,
+                                    "No tiene permiso para acceder al catálogo de roles.");
+                        }
+                    }
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException ex) {
+                    opcionUsuarios.setEnabled(false);
+                    opcionRoles.setEnabled(false);
+                    JOptionPane.showMessageDialog(Fr_Principal.this,
+                            "No se pudieron actualizar los permisos. Revise la conexión MySQL.",
+                            "Error de permisos", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    opcionActualizarPermisos.setEnabled(true);
+                }
+            }
+        };
+        tarea.execute();
+    }
+
+    /**
+     * Cierra la sesión del usuario sin finalizar Hibernate ni crear otro
+     * JFrame de catálogo.
      */
     private void cerrarSesion() {
         if (usuarios == null) {
             dispose();
             return;
         }
-        Fr_Login login = new Fr_Login(usuarios);
-        login.setVisible(true);
+        new Fr_Login(usuarios).setVisible(true);
         dispose();
     }
 }

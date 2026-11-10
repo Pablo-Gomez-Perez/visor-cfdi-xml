@@ -4,6 +4,7 @@ import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.Font;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import javax.swing.GroupLayout;
@@ -62,7 +63,7 @@ public class Fr_DatosUsuario extends JDialog {
      * Constructor sin servicios para previsualización en WindowBuilder.
      */
     public Fr_DatosUsuario() {
-        this(null, null, null, null, null);
+        this(null, null, null, null, null, List.of());
     }
 
     /**
@@ -73,15 +74,26 @@ public class Fr_DatosUsuario extends JDialog {
      * @param sesion administrador autenticado
      * @param registro cuenta a editar, o null para crear una nueva
      * @param alGuardar acción de refresco del catálogo
+     * @param rolesDisponibles claves existentes para poblar el combo en alta
      */
     public Fr_DatosUsuario(Frame dueno, UsuariosService usuarios,
-            UsuarioSesion sesion, UsuarioListado registro, Runnable alGuardar) {
+            UsuarioSesion sesion, UsuarioListado registro, Runnable alGuardar,
+            List<String> rolesDisponibles) {
         super(dueno, "Datos del usuario", ModalityType.APPLICATION_MODAL);
         this.usuarios = usuarios;
         this.sesion = sesion;
         this.registro = registro;
         this.alGuardar = alGuardar;
         inicializarComponentes();
+        if (rolesDisponibles != null && !rolesDisponibles.isEmpty()) {
+            cmbRol.removeAllItems();
+            for (String rol : rolesDisponibles) {
+                cmbRol.addItem(rol);
+            }
+            if (rolesDisponibles.contains(UsuariosService.CONSULTA)) {
+                cmbRol.setSelectedItem(UsuariosService.CONSULTA);
+            }
+        }
         if (registro != null) {
             prepararEdicion(registro);
         }

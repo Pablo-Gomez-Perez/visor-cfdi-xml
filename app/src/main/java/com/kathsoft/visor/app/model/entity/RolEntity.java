@@ -5,6 +5,12 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
+import java.util.HashSet;
+import java.util.Set;
 import jakarta.persistence.Table;
 
 /** Entidad del catálogo existente rol; no crea ni modifica tablas. */
@@ -22,6 +28,12 @@ public class RolEntity {
 
     @Column(name = "descripcion", nullable = false, length = 200)
     private String descripcion;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "rol_permiso",
+            joinColumns = @JoinColumn(name = "rol_id"),
+            inverseJoinColumns = @JoinColumn(name = "permiso_id"))
+    private Set<PermisoEntity> permisos = new HashSet<>();
 
     /** Constructor requerido por JPA. */
     protected RolEntity() {
@@ -42,4 +54,10 @@ public class RolEntity {
     public String getClave() { return clave; }
 
     public String getDescripcion() { return descripcion; }
+
+    /** @return colección administrada por JPA de permisos del rol */
+    public Set<PermisoEntity> getPermisos() { return permisos; }
+
+    /** @param descripcion texto descriptivo del rol */
+    public void setDescripcion(String descripcion) { this.descripcion = descripcion; }
 }

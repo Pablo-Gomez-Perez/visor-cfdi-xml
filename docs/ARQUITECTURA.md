@@ -70,3 +70,23 @@ los constructores visuales.
 - Una interrupción del servicio de MySQL no destruye ni reescribe el almacén; se puede reintentar después de iniciar MySQL.
 
 Referencia oficial: MySQL Connector/J Security Properties y MySQL 8 Caching SHA-2 Authentication.
+
+## RBAC configurable (RF-003)
+
+Los permisos se modelan como operaciones atómicas `recurso + accion`
+en `permiso`. Se enlazan a los roles a través de `rol_permiso`, y a
+usuarios mediante `usuario_rol`. La autorización `AutorizacionService`
+consulta la unión de los permisos de los roles vigentes de un usuario
+`ACTIVO` **en cada operación sensible**, no únicamente al iniciar sesión.
+
+El catálogo visible de privilegios tiene que corresponder a acciones
+realmente implementadas; se debe crear un nuevo permiso a la vez que su
+verificación dentro del servicio. Cambios administrativos de roles y
+privilegios son transacciones Java y se registran en `bitacora_evento`.
+
+El permiso `ROLES.CONFIGURAR_PERMISOS` es irrenunciable para el rol ADMIN
+para evitar bloqueo administrativo. Para conferir el rol ADMIN se requiere
+un permiso adicional `USUARIOS.ASIGNAR_ADMIN`. Esta política no reemplaza
+la necesidad de autorización en servidor para clientes no confiables.
+
+Referencia: [docs/RF-003.md](RF-003.md).

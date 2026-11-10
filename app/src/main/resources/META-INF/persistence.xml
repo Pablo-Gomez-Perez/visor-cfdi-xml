@@ -7,6 +7,7 @@
         <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
         <class>com.kathsoft.visor.app.model.entity.UsuarioEntity</class>
         <class>com.kathsoft.visor.app.model.entity.RolEntity</class>
+        <class>com.kathsoft.visor.app.model.entity.PermisoEntity</class>
         <class>com.kathsoft.visor.app.model.entity.BitacoraEventoEntity</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
         <properties>
