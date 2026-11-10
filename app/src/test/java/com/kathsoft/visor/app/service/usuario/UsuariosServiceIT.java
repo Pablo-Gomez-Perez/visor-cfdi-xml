@@ -56,7 +56,7 @@ class UsuariosServiceIT {
     }
 
     @Test
-    void administraUsuariosEnElEsquemaRealConTransacciones() {
+    void administraUsuariosEnElEsquemaRealConTransacciones() throws Exception {
         ConfiguracionSistema config = new ConfiguracionSistema(
                 MYSQL.getHost(), MYSQL.getMappedPort(3306), MYSQL.getDatabaseName(),
                 MYSQL.getUsername(), Path.of("xml"));
