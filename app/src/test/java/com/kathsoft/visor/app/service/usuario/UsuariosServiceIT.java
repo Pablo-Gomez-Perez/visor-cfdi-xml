@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -20,6 +21,8 @@ import com.kathsoft.visor.app.model.dto.SolicitudUsuario;
 import com.kathsoft.visor.app.model.dto.UsuarioSesion;
 import com.kathsoft.visor.app.model.entity.UsuarioEstado;
 import com.kathsoft.visor.app.persistence.JpaContext;
+import com.kathsoft.visor.app.service.configuracion.ConexionMySqlService;
+import com.kathsoft.visor.app.service.configuracion.CredencialesMySqlService;
 
 /**
  * Prueba de integración sobre MySQL 8 real. Ejecuta el esquema original v1
@@ -27,6 +30,9 @@ import com.kathsoft.visor.app.persistence.JpaContext;
  */
 @Testcontainers(disabledWithoutDocker = true)
 class UsuariosServiceIT {
+
+    @TempDir
+    Path directorioTemporal;
 
     private static final Path ESQUEMA = buscarEsquema();
 
@@ -50,12 +56,22 @@ class UsuariosServiceIT {
     }
 
     @Test
-    void administraUsuariosEnElEsquemaRealConTransacciones() {
+    void administraUsuariosEnElEsquemaRealConTransacciones() throws Exception {
         ConfiguracionSistema config = new ConfiguracionSistema(
                 MYSQL.getHost(), MYSQL.getMappedPort(3306), MYSQL.getDatabaseName(),
                 MYSQL.getUsername(), Path.of("xml"));
         char[] dbClave = MYSQL.getPassword().toCharArray();
-        try (JpaContext jpa = new JpaContext(config, dbClave)) {
+        // Prueba real del mismo URL JDBC que se utilizará en Hibernate.
+        // caching_sha2_password debe funcionar sobre loopback sin depender
+        // de una autenticación previamente guardada en la caché del servidor.
+        new ConexionMySqlService().probarConexion(config, dbClave);
+        // Confirma que la credencial cifrada puede iniciar un nuevo pool ORM.
+        CredencialesMySqlService almacen = new CredencialesMySqlService(
+                directorioTemporal.resolve("config-cifrada"));
+        almacen.guardar(config, dbClave);
+        char[] recuperada = almacen.cargar(config);
+        try (JpaContext jpa = new JpaContext(config, recuperada)) {
+            Arrays.fill(recuperada, '\0');
             Arrays.fill(dbClave, '\0');
             UsuariosService usuarios = new UsuariosService(jpa);
             usuarios.inicializarRoles();

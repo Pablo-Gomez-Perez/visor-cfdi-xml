@@ -44,7 +44,7 @@ Se recomienda que los procedimientos utilizados dentro de transacciones Java no 
 
 ## Seguridad y restricciones actuales
 
-La contraseña de MySQL se solicita por ejecución y no se guarda en disco; la de usuario se conserva como hash PBKDF2-HMAC-SHA256 con sal individual y 600 000 iteraciones. Los cambios de cuentas requieren volver a validar el rol ADMIN y quedan en `bitacora_evento`.
+La contraseña MySQL se obtiene automáticamente del almacén local `CredencialesMySqlService`, cifrado mediante AES-256-GCM con una clave aleatoria separada por instalación. Se vincula mediante datos autenticados (AAD) al host, puerto, base y usuario. En POSIX se restringen los permisos a propietario; ambos archivos juntos permiten descifrar el secreto y deben protegerse como credenciales. La contraseña **del usuario de aplicación**, por el contrario, no es reversible: se conserva como hash PBKDF2-HMAC-SHA256 con sal individual y 600 000 iteraciones. Los cambios de cuentas requieren volver a validar el rol ADMIN y quedan en `bitacora_evento`.
 
 **Importante:** los controles de rol implementados en un cliente Swing que se conecta directamente a MySQL no constituyen una barrera de seguridad contra una persona con credenciales de escritura directas a la base. En instalaciones con usuarios no confiables o acceso por Internet será necesario un servicio intermedio que imponga autorización en el servidor, además de TLS y privilegios MySQL mínimos. RF-003 definirá permisos finos por contribuyente y módulo.
 
@@ -58,3 +58,15 @@ central que aloja los catálogos como `JPanel` independientes. Los detalles de
 un registro se editan en un único `JDialog` reutilizable para alta y cambio.
 No crear ventanas de listado independientes ni ejecutar consultas JPA desde
 los constructores visuales.
+
+## Arranque y autenticación MySQL
+
+- RF-001 guarda los parámetros no secretos en `config.properties`; solo después de verificar MySQL guarda la contraseña cifrada de conexión en `database.credentials` y su clave AES en `connection.key`.
+- RF-002 inicia `JpaContext` y `UsuariosService` automáticamente desde `Fr_ConexionMySql` mediante `SwingWorker`; solo se pide el secreto cuando no está guardado o cuando el operador lo modifica.
+- Cambiar host, puerto, esquema o usuario invalida el descifrado por AAD: nunca reutilizar silenciosamente la clave en otra conexión.
+- La contraseña JDBC se entrega a Hibernate como `String` porque el proveedor lo requiere; no puede borrarse inmediatamente de la memoria JVM, aunque los arreglos temporales `char[]` se limpian.
+- Conexiones MySQL locales: `sslMode=DISABLED` y `allowPublicKeyRetrieval=true` solo en localhost, 127.0.0.1 y ::1. Limitarlo a loopback es deliberado y no es una configuración apropiada para LAN/Internet.
+- Conexiones remotas: `sslMode=VERIFY_IDENTITY`, `allowPublicKeyRetrieval=false`; requiere CA confiable y nombre de servidor verificable.
+- Una interrupción del servicio de MySQL no destruye ni reescribe el almacén; se puede reintentar después de iniciar MySQL.
+
+Referencia oficial: MySQL Connector/J Security Properties y MySQL 8 Caching SHA-2 Authentication.

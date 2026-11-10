@@ -32,3 +32,8 @@ config.properties
 # Fallos de la JVM
 hs_err_pid*
 replay_pid*
+
+# Credenciales cifradas de conexión MySQL (nunca versionar junto a la clave)
+database.credentials
+*.credentials
+.visor-cfdi-xml/

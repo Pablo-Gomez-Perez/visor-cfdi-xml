@@ -28,7 +28,9 @@ Consultar `docs/ARQUITECTURA.md`, `docs/RF-002.md` y el esquema canónico `app/d
 
 ## Seguridad e integridad
 
-- No almacenar credenciales MySQL en repositorio, archivos de configuración ni logs.
+- La contraseña MySQL se almacena recuperable **solo cifrada** mediante `CredencialesMySqlService`: AES-256-GCM en `database.credentials` con clave aleatoria separada `connection.key`, dentro del perfil del usuario; nunca en `config.properties`, Git ni logs. Este mecanismo no es una bóveda de seguridad y no se deben copiar juntos los dos ficheros.
+- Mantener conexión automática tras la primera configuración y el login de aplicación separado del login MySQL. No introducir prompts MySQL por sesión.
+- Para `caching_sha2_password`, solo localhost/127.0.0.1/::1 permite `allowPublicKeyRetrieval=true` con TLS deshabilitado; en remoto exigir `VERIFY_IDENTITY` y prohibir recuperación RSA no verificada.
 - Contraseñas de usuarios: hash con sal, nunca texto plano.
 - Los roles definidos en el cliente no defienden contra usuarios que poseen acceso de escritura directo a MySQL. Para entornos no confiables diseñar capa de autorización server-side.
 - Una factura UUID se almacena una vez; las clasificaciones y los pagos tienen tablas separadas.
