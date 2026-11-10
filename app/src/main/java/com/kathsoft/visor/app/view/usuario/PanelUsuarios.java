@@ -404,6 +404,7 @@ public class PanelUsuarios extends JPanel {
             }
             @Override
             protected void done() {
+                boolean operacionIniciada = false;
                 try {
                     List<String> disponibles = get();
                     String rol = (String) JOptionPane.showInputDialog(
@@ -415,13 +416,16 @@ public class PanelUsuarios extends JPanel {
                     if (rol != null) {
                         ejecutarOperacion(() ->
                                 usuarios.cambiarRol(sesion.id(), usuario.id(), rol));
+                        operacionIniciada = true;
                     }
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();
                 } catch (ExecutionException ex) {
                     mostrarError(ex);
                 } finally {
-                    establecerOcupado(false);
+                    if (!operacionIniciada) {
+                        establecerOcupado(false);
+                    }
                 }
             }
         };

@@ -74,6 +74,7 @@ public class Fr_DatosUsuario extends JDialog {
      * @param sesion administrador autenticado
      * @param registro cuenta a editar, o null para crear una nueva
      * @param alGuardar acción de refresco del catálogo
+     * @param rolesDisponibles claves existentes para poblar el combo en alta
      */
     public Fr_DatosUsuario(Frame dueno, UsuariosService usuarios,
             UsuarioSesion sesion, UsuarioListado registro, Runnable alGuardar,
