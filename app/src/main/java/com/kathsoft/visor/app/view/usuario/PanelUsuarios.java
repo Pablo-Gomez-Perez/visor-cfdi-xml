@@ -47,6 +47,9 @@ public class PanelUsuarios extends JPanel {
     private UsuariosService usuarios;
     private UsuarioSesion sesion;
 
+    private boolean consultaActiva;
+    private boolean recargaPendiente;
+
     private JPanel panelEtiquetaUsuarios;
     private JPanel panelCentralContenedor;
     private JPanel panelSuperiorBotones;
@@ -253,6 +256,11 @@ public class PanelUsuarios extends JPanel {
         if (usuarios == null || sesion == null || !sesion.esAdministrador()) {
             return;
         }
+        if (consultaActiva) {
+            recargaPendiente = true;
+            return;
+        }
+        consultaActiva = true;
         establecerOcupado(true);
         lblResultado.setText("Consultando usuarios...");
         SwingWorker<List<UsuarioListado>, Void> tarea = new SwingWorker<>() {
@@ -279,7 +287,13 @@ public class PanelUsuarios extends JPanel {
                 } catch (ExecutionException ex) {
                     mostrarError(ex);
                 } finally {
-                    establecerOcupado(false);
+                    consultaActiva = false;
+                    if (recargaPendiente) {
+                        recargaPendiente = false;
+                        recargar();
+                    } else {
+                        establecerOcupado(false);
+                    }
                 }
             }
         };
@@ -392,16 +406,20 @@ public class PanelUsuarios extends JPanel {
             }
             @Override
             protected void done() {
+                boolean actualizarEnCurso = false;
                 try {
                     get();
                     recargar();
+                    actualizarEnCurso = true;
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();
                 } catch (ExecutionException ex) {
                     mostrarError(ex);
                 } finally {
                     despues.run();
-                    establecerOcupado(false);
+                    if (!actualizarEnCurso) {
+                        establecerOcupado(false);
+                    }
                 }
             }
         };
