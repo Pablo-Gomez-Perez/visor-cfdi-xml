@@ -24,6 +24,7 @@ import com.kathsoft.visor.App;
 import com.kathsoft.visor.app.model.configuracion.ConfiguracionSistema;
 import com.kathsoft.visor.app.service.configuracion.ConexionMySqlService;
 import com.kathsoft.visor.app.service.configuracion.ConfiguracionLocalService;
+import com.kathsoft.visor.app.service.configuracion.CredencialesMySqlService;
 
 /**
  * RF-001: formulario de primera configuración de Visor CFDI XML.
@@ -38,6 +39,7 @@ public class Fr_ConfiguracionInicial extends JFrame {
 
     private final ConexionMySqlService servicioConexion = new ConexionMySqlService();
     private final ConfiguracionLocalService servicioConfiguracion = new ConfiguracionLocalService();
+    private final CredencialesMySqlService servicioCredenciales = new CredencialesMySqlService();
 
     private JPanel contentPane;
     private JPanel panelConexion;
@@ -78,7 +80,7 @@ public class Fr_ConfiguracionInicial extends JFrame {
         inicializarComponentes();
         if (configuracion != null) {
             mostrarConfiguracion(configuracion);
-            lblEstado.setText("Configuración local cargada. Introduzca la contraseña para verificar.");
+            lblEstado.setText("Configuración cargada. La contraseña se guardará cifrada al confirmar.");
         }
     }
 
@@ -277,6 +279,7 @@ public class Fr_ConfiguracionInicial extends JFrame {
                 if (guardar) {
                     servicioConfiguracion.prepararRepositorio(datos.directorioXml());
                     servicioConfiguracion.guardar(datos);
+                    servicioCredenciales.guardar(datos, clave);
                 }
                 return null;
             }
@@ -291,7 +294,7 @@ public class Fr_ConfiguracionInicial extends JFrame {
                     if (guardar) {
                         JOptionPane.showMessageDialog(Fr_ConfiguracionInicial.this,
                                 "Configuración guardada correctamente.\n"
-                                        + "Los XML permanecerán en el repositorio local seleccionado.",
+                                        + "La contraseña MySQL quedó cifrada en el perfil del usuario.",
                                 "Configuración inicial", JOptionPane.INFORMATION_MESSAGE);
                         App.abrirConexion(datos);
                         dispose();

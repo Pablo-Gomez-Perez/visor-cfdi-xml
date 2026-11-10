@@ -28,7 +28,8 @@ public final class JpaContext implements AutoCloseable {
      * Construye el pool de conexiones de esta sesión de la aplicación.
      *
      * @param config datos locales sin contraseña
-     * @param password clave MySQL solicitada al inicio, no persistida en disco
+     * @param password clave MySQL temporal; se obtiene del almacén cifrado
+     *                 y se limpia del arreglo del llamador después de usarla
      */
     public JpaContext(ConfiguracionSistema config, char[] password) {
         Objects.requireNonNull(config, "Configuración requerida");
@@ -44,8 +45,11 @@ public final class JpaContext implements AutoCloseable {
         props.put("hibernate.hikari.connectionTimeout", "5000");
         props.put("hibernate.hikari.poolName", "VisorCFDI");
         props.put("hibernate.hbm2ddl.auto", "validate");
-        factory = Persistence.createEntityManagerFactory("visor-cfdi", props);
-        props.remove("jakarta.persistence.jdbc.password");
+        try {
+            factory = Persistence.createEntityManagerFactory("visor-cfdi", props);
+        } finally {
+            props.remove("jakarta.persistence.jdbc.password");
+        }
     }
 
     /**

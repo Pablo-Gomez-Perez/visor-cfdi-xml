@@ -49,8 +49,10 @@ public class ConexionMySqlService {
     /**
      * Construye una URL sin parámetros de origen arbitrario.
      *
-     * <p>La conexión local por loopback no usa TLS; en servidores remotos
-     * es obligatorio VERIFY_IDENTITY. Se requiere una CA de confianza.</p>
+     * <p>Solo para loopback se permite recuperar la clave pública RSA del
+     * servidor y autenticar caching_sha2_password sin TLS. En conexiones
+     * remotas se prohíbe RSA retrieval y se exige TLS VERIFY_IDENTITY,
+     * con CA confiable y nombre del host verificado.</p>
      *
      * @param datos configuración validada
      * @return URL JDBC lista para el driver MySQL
@@ -63,6 +65,8 @@ public class ConexionMySqlService {
                 || "[::1]".equals(host);
         String ssl = local ? "DISABLED" : "VERIFY_IDENTITY";
         return "jdbc:mysql://" + host + ":" + datos.puerto() + "/" + datos.baseDatos()
-                + "?sslMode=" + ssl + "&connectionTimeZone=UTC";
+                + "?sslMode=" + ssl
+                + "&allowPublicKeyRetrieval=" + local
+                + "&connectionTimeZone=UTC";
     }
 }
