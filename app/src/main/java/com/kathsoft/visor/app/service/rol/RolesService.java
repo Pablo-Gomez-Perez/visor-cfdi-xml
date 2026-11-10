@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -223,7 +224,7 @@ public final class RolesService {
      * @param seleccionados ids del catálogo permiso
      */
     public void guardarPermisos(Long operadorId, Short rolId, Set<Short> seleccionados) {
-        if (seleccionados == null || seleccionados.contains(null)) {
+        if (seleccionados == null || seleccionados.stream().anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException("La selección de permisos no es válida");
         }
         Set<Short> ids = Set.copyOf(seleccionados);
