@@ -8,6 +8,8 @@
         <class>com.kathsoft.visor.app.model.entity.UsuarioEntity</class>
         <class>com.kathsoft.visor.app.model.entity.RolEntity</class>
         <class>com.kathsoft.visor.app.model.entity.PermisoEntity</class>
+        <class>com.kathsoft.visor.app.model.entity.ContribuyenteEntity</class>
+        <class>com.kathsoft.visor.app.model.entity.ContribuyenteRegimenEntity</class>
         <class>com.kathsoft.visor.app.model.entity.BitacoraEventoEntity</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
         <properties>
