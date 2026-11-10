@@ -1,6 +1,13 @@
 package com.kathsoft.visor.app.model.entity;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
+
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -45,6 +52,12 @@ public class ContribuyenteEntity {
     @Column(name = "creado_en", insertable = false, updatable = false)
     private LocalDateTime creadoEn;
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "usuario_contribuyente",
+            joinColumns = @JoinColumn(name = "contribuyente_id"),
+            inverseJoinColumns = @JoinColumn(name = "usuario_id"))
+    private Set<UsuarioEntity> usuariosAutorizados = new HashSet<>();
+
     /** Constructor para Hibernate. */
     protected ContribuyenteEntity() {
     }
@@ -72,6 +85,9 @@ public class ContribuyenteEntity {
     public String getCorreoContacto() { return correoContacto; }
     public Boolean getActivo() { return activo; }
     public LocalDateTime getCreadoEn() { return creadoEn; }
+
+    /** @return cuentas explícitamente vinculadas al contribuyente */
+    public Set<UsuarioEntity> getUsuariosAutorizados() { return usuariosAutorizados; }
 
     /** @param nombre nombre legal o razón social */
     public void setNombreRazonSocial(String nombre) { this.nombreRazonSocial = nombre; }

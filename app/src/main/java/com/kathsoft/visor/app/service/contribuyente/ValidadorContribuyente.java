@@ -68,7 +68,7 @@ public final class ValidadorContribuyente {
      */
     public static String normalizarRegimen(String clave) {
         String codigo = clave == null ? "" : clave.strip().toUpperCase(Locale.ROOT);
-        if (!codigo.matches("[0-9A-Z]{1,5}")) {
+        if (!codigo.matches("[0-9]{3}")) {
             throw new IllegalArgumentException("La clave del régimen fiscal no es válida");
         }
         return codigo;
