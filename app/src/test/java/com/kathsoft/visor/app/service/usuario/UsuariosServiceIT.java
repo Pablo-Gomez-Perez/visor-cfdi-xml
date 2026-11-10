@@ -20,6 +20,8 @@ import com.kathsoft.visor.app.model.dto.SolicitudUsuario;
 import com.kathsoft.visor.app.model.dto.UsuarioSesion;
 import com.kathsoft.visor.app.model.entity.UsuarioEstado;
 import com.kathsoft.visor.app.persistence.JpaContext;
+import com.kathsoft.visor.app.service.configuracion.ConexionMySqlService;
+import com.kathsoft.visor.app.service.configuracion.CredencialesMySqlService;
 
 /**
  * Prueba de integración sobre MySQL 8 real. Ejecuta el esquema original v1
@@ -55,7 +57,18 @@ class UsuariosServiceIT {
                 MYSQL.getHost(), MYSQL.getMappedPort(3306), MYSQL.getDatabaseName(),
                 MYSQL.getUsername(), Path.of("xml"));
         char[] dbClave = MYSQL.getPassword().toCharArray();
-        try (JpaContext jpa = new JpaContext(config, dbClave)) {
+        // Prueba real del mismo URL JDBC que se utilizará en Hibernate.
+        // caching_sha2_password debe funcionar sobre loopback sin depender
+        // de una autenticación previamente guardada en la caché del servidor.
+        new ConexionMySqlService().probarConexion(config, dbClave);
+        // Confirma que la credencial cifrada puede iniciar un nuevo pool ORM.
+        CredencialesMySqlService almacen = new CredencialesMySqlService(
+                java.nio.file.Path.of(System.getProperty("java.io.tmpdir"),
+                        "visor-it-" + java.util.UUID.randomUUID()));
+        almacen.guardar(config, dbClave);
+        char[] recuperada = almacen.cargar(config);
+        try (JpaContext jpa = new JpaContext(config, recuperada)) {
+            Arrays.fill(recuperada, '\0');
             Arrays.fill(dbClave, '\0');
             UsuariosService usuarios = new UsuariosService(jpa);
             usuarios.inicializarRoles();
