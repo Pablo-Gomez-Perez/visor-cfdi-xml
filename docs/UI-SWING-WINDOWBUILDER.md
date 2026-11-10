@@ -22,7 +22,8 @@ Fr_Principal extends JFrame
 ├── JMenuBar
 │   ├── Inicio
 │   ├── Administración
-│   │   └── Administrar usuarios → CardLayout ("panelUsuarios")
+│   │   ├── Administrar usuarios → CardLayout ("panelUsuarios")
+│   │   └── Roles y permisos → CardLayout ("panelRoles")
 │   ├── CFDI
 │   │   ├── Administrar XML (pendiente)
 │   │   └── Cargar XML (pendiente)
@@ -33,12 +34,16 @@ Fr_Principal extends JFrame
 │   └── Cargar XML (deshabilitado por ahora)
 ├── panelPrincipalContenedor: JPanel con CardLayout
 │   ├── PanelInicio extends JPanel
-│   └── PanelUsuarios extends JPanel
+│   ├── PanelUsuarios extends JPanel
 │       ├── panelEtiquetaUsuarios
 │       └── panelCentralContenedor
 │           ├── panelSuperiorBotones (acciones)
 │           ├── JScrollPane + JTable (contenido)
 │           └── panelInferiorBusqueda (búsqueda y filtros)
+│   └── PanelRoles extends JPanel
+│       ├── barra de acciones: crear, editar, configurar privilegios, eliminar
+│       ├── JTable de roles
+│       └── herramientas de búsqueda
 └── panelEstado: JPanel de sesión
 ```
 
@@ -123,3 +128,16 @@ y archivos Java separados, sin JFrames de catálogo.
 RF-002 se muestra dentro de `PanelUsuarios`, se navega desde
 `Fr_Principal` y utiliza `Fr_DatosUsuario` para crear/editar
 un registro. Los módulos de CFDI siguen pendientes de implementación.
+
+## RF-003 — Matriz de privilegios
+
+La tarjeta `PanelRoles` sigue el patrón de Kath ERP sin ventanas
+de listado adicionales. El `Fr_DatosRol` modal permite crear y editar
+un rol. El `Fr_PermisosRol` modal contiene una `JTable` con primera
+columna `Boolean.class`: Swing presenta sus celdas con casillas
+`JCheckBox`. Las columnas restantes explican módulo, acción y
+descripción. Los checkboxes obligatorios de ADMIN no son editables.
+
+Las operaciones se cargan y guardan en `SwingWorker`, y los servicios
+verifican privilegios en MySQL antes de ejecutar cambios. Los catálogos
+de usuarios y roles muestran controles según los permisos actualizados.

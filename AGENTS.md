@@ -42,3 +42,14 @@ Consultar `docs/ARQUITECTURA.md`, `docs/RF-002.md` y el esquema canónico `app/d
 - `*Test` para unitarias y `*IT` para integración aislada con MySQL 8 y SQL original del repositorio.
 - No ejecutar tests de integración contra una base real de usuario, ni modificar tablas en producción.
 - Git en ramas `feat/*`, PR revisable contra `main`. No fusionar automáticamente.
+
+## RF-003 — RBAC y catálogo editable
+
+- Consultar `docs/RF-003.md` y los mapeos `RolEntity`/`PermisoEntity` antes de añadir operaciones protegidas.
+- Los privilegios de aplicación usan la pareja `permiso.recurso` + `permiso.accion` (por ejemplo `USUARIOS.MODIFICAR`). Los concede el administrador con `PanelRoles` + `Fr_PermisosRol` y se conservan en `rol_permiso`.
+- Añadir privilegios únicamente cuando un módulo implemente y verifique esa acción desde el servicio. Los botones Swing no son la barrera de seguridad.
+- Usar `AutorizacionService.exigir(em, usuarioId, permiso)` **dentro de la transacción** para escrituras y `AutorizacionService.permisosDe` para obtener la unión de roles activos.
+- Nunca quitar `ROLES.CONFIGURAR_PERMISOS` del rol ADMIN; esta regla protege la capacidad de recuperación. El resto de sus privilegios son configurables y los demás roles empiezan sin permisos.
+- `USUARIOS.ASIGNAR_ADMIN` se exige por separado al otorgar el rol privilegiado ADMIN.
+- Un rol personalizado es editable pero no puede borrarse si hay usuarios asociados. La clave del rol no cambia tras el alta.
+- Para el cliente Swing, recuperar permisos vigentes en `SwingWorker` al entrar a cada catálogo; la pantalla debe mantener GroupLayout y WindowBuilder.
