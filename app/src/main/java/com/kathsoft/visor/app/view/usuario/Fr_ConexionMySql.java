@@ -34,7 +34,7 @@ public class Fr_ConexionMySql extends JFrame {
     private static final long serialVersionUID = 1L;
 
     private ConfiguracionSistema configuracion;
-    private final CredencialesMySqlService almacén = new CredencialesMySqlService();
+    private final CredencialesMySqlService almacen = new CredencialesMySqlService();
     private boolean modoCaptura;
 
     private JPanel contentPane;
@@ -126,7 +126,7 @@ public class Fr_ConexionMySql extends JFrame {
     }
 
     /**
-     * Oculta la captura del secreto si el almacén cifrado ya está disponible.
+     * Oculta la captura del secreto si el almacen cifrado ya está disponible.
      */
     private void mostrarModoAutomatico() {
         modoCaptura = false;
@@ -164,7 +164,7 @@ public class Fr_ConexionMySql extends JFrame {
             lblEstado.setText("Falta configurar el servidor MySQL");
             return;
         }
-        if (!almacén.existen()) {
+        if (!almacen.existen()) {
             activarCaptura("Primera conexión: introduzca su contraseña MySQL una sola vez.");
             return;
         }
@@ -184,13 +184,13 @@ public class Fr_ConexionMySql extends JFrame {
         btnConectar.setEnabled(false);
         btnCambiarClave.setEnabled(false);
         lblEstado.setText(guardarNueva
-                ? "Comprobando contraseña y preparando el almacén cifrado..."
+                ? "Comprobando contraseña y preparando el almacen cifrado..."
                 : "Conectando automáticamente con MySQL...");
 
         SwingWorker<ResultadoConexion, Void> tarea = new SwingWorker<>() {
             @Override
             protected ResultadoConexion doInBackground() throws Exception {
-                char[] clave = guardarNueva ? introducida : almacén.cargar(configuracion);
+                char[] clave = guardarNueva ? introducida : almacen.cargar(configuracion);
                 try {
                     JpaContext jpa = new JpaContext(configuracion, clave);
                     try {
@@ -200,7 +200,7 @@ public class Fr_ConexionMySql extends JFrame {
                         if (guardarNueva) {
                             // Solo guarda un secreto si las conexiones Hibernate
                             // y la verificación de esquema funcionaron.
-                            almacén.guardar(configuracion, clave);
+                            almacen.guardar(configuracion, clave);
                         }
                         return new ResultadoConexion(jpa, usuarios, registrarAdmin);
                     } catch (Exception | Error ex) {

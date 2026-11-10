@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -29,6 +30,9 @@ import com.kathsoft.visor.app.service.configuracion.CredencialesMySqlService;
  */
 @Testcontainers(disabledWithoutDocker = true)
 class UsuariosServiceIT {
+
+    @TempDir
+    Path directorioTemporal;
 
     private static final Path ESQUEMA = buscarEsquema();
 
@@ -63,8 +67,7 @@ class UsuariosServiceIT {
         new ConexionMySqlService().probarConexion(config, dbClave);
         // Confirma que la credencial cifrada puede iniciar un nuevo pool ORM.
         CredencialesMySqlService almacen = new CredencialesMySqlService(
-                java.nio.file.Path.of(System.getProperty("java.io.tmpdir"),
-                        "visor-it-" + java.util.UUID.randomUUID()));
+                directorioTemporal.resolve("config-cifrada"));
         almacen.guardar(config, dbClave);
         char[] recuperada = almacen.cargar(config);
         try (JpaContext jpa = new JpaContext(config, recuperada)) {

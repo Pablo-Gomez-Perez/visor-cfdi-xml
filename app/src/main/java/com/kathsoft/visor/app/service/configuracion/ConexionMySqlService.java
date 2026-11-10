@@ -64,7 +64,8 @@ public class ConexionMySqlService {
                 || "::1".equals(host)
                 || "[::1]".equals(host);
         String ssl = local ? "DISABLED" : "VERIFY_IDENTITY";
-        return "jdbc:mysql://" + host + ":" + datos.puerto() + "/" + datos.baseDatos()
+        String hostUrl = "::1".equals(host) ? "[::1]" : host;
+        return "jdbc:mysql://" + hostUrl + ":" + datos.puerto() + "/" + datos.baseDatos()
                 + "?sslMode=" + ssl
                 + "&allowPublicKeyRetrieval=" + local
                 + "&connectionTimeZone=UTC";
