@@ -207,10 +207,11 @@ public final class UsuariosService {
         String hash = PasswordHasher.crearHash(clave);
         jpa.enTransaccion(em -> {
             AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_CREAR);
-            if (ADMIN.equals(solicitud.rol())) {
-                AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_ASIGNAR_ADMIN);
+            if (!CONSULTA.equals(solicitud.rol())) {
+                AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_ASIGNAR_ROL);
             }
             RolEntity rol = obtenerRolBloqueado(em, solicitud.rol());
+            validarAsignacionRol(em, administradorId, rol);
             UsuarioEntity usuario = nuevoUsuario(solicitud, hash);
             usuario.getRoles().add(rol);
             em.persist(usuario);
@@ -308,13 +309,11 @@ public final class UsuariosService {
             AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_ASIGNAR_ROL);
             bloquearRolAdmin(em);
             UsuarioEntity usuario = buscarUsuarioConRoles(em, usuarioId);
-            if (ADMIN.equals(nuevaClave)) {
-                AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_ASIGNAR_ADMIN);
-            }
             if (!ADMIN.equals(nuevaClave)) {
                 verificarNoEsUltimoAdmin(em, usuario);
             }
             RolEntity rol = obtenerRol(em, nuevaClave);
+            validarAsignacionRol(em, administradorId, rol);
             usuario.getRoles().clear();
             usuario.getRoles().add(rol);
             registrarEvento(em, administradorId, usuarioId, "CAMBIAR_ROL");
@@ -392,6 +391,28 @@ public final class UsuariosService {
     private static void validarRol(String clave) {
         if (clave == null || !clave.matches("[A-Z][A-Z0-9_]{2,39}")) {
             throw new IllegalArgumentException("La clave del rol debe ser válida y estar en mayúsculas");
+        }
+    }
+
+    /**
+     * Evita que el permiso ordinario de asignación se utilice para conceder
+     * roles más poderosos que los del operador. Configurar privilegios es
+     * una facultad de rango superior; asignar ADMIN es siempre explícito.
+     */
+    private static void validarAsignacionRol(EntityManager em, Long operadorId, RolEntity rol) {
+        if (ADMIN.equals(rol.getClave())) {
+            AutorizacionService.exigir(em, operadorId, Permisos.USUARIOS_ASIGNAR_ADMIN);
+            return;
+        }
+        Set<String> efectivos = AutorizacionService.permisosDe(em, operadorId);
+        if (efectivos.contains(Permisos.ROLES_CONFIGURAR_PERMISOS)) {
+            return;
+        }
+        Set<String> solicitados = rol.getPermisos().stream()
+                .map(p -> p.getClave()).collect(Collectors.toSet());
+        if (!efectivos.containsAll(solicitados)) {
+            throw new SecurityException(
+                    "No puede asignar un rol con más privilegios que los propios");
         }
     }
 

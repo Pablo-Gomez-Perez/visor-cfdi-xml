@@ -33,10 +33,10 @@ public final class Permisos {
 
     private static final List<DefinicionPermiso> CATALOGO = List.of(
         new DefinicionPermiso("USUARIOS", "CONSULTAR", "Consultar el listado de usuarios"),
-        new DefinicionPermiso("USUARIOS", "CREAR", "Registrar usuarios"),
+        new DefinicionPermiso("USUARIOS", "CREAR", "Registrar usuarios (por defecto con rol CONSULTA)"),
         new DefinicionPermiso("USUARIOS", "MODIFICAR", "Editar nombre, login y correo de usuarios"),
         new DefinicionPermiso("USUARIOS", "CAMBIAR_ESTADO", "Activar e inactivar usuarios"),
-        new DefinicionPermiso("USUARIOS", "ASIGNAR_ROL", "Asignar roles a usuarios"),
+        new DefinicionPermiso("USUARIOS", "ASIGNAR_ROL", "Asignar roles sin conceder privilegios superiores a los propios"),
         new DefinicionPermiso("USUARIOS", "RESTABLECER_CLAVE", "Restablecer contraseñas de usuarios"),
         new DefinicionPermiso("USUARIOS", "ASIGNAR_ADMIN", "Asignar el rol privilegiado ADMIN (operación crítica)"),
         new DefinicionPermiso("ROLES", "CONSULTAR", "Consultar el catálogo de roles"),
