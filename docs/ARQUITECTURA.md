@@ -49,3 +49,12 @@ La contraseña de MySQL se solicita por ejecución y no se guarda en disco; la d
 **Importante:** los controles de rol implementados en un cliente Swing que se conecta directamente a MySQL no constituyen una barrera de seguridad contra una persona con credenciales de escritura directas a la base. En instalaciones con usuarios no confiables o acceso por Internet será necesario un servicio intermedio que imponga autorización en el servidor, además de TLS y privilegios MySQL mínimos. RF-003 definirá permisos finos por contribuyente y módulo.
 
 Nunca usar `hibernate.hbm2ddl.auto=update`, `create` ni `create-drop` sobre la base del usuario; debe mantenerse `validate`. Los cambios de esquema se versionarán mediante migraciones SQL.
+
+## Arquitectura de la interfaz
+
+Se aplica la guía obligatoria [UI Swing y WindowBuilder](UI-SWING-WINDOWBUILDER.md).
+La ventana principal contiene `JMenuBar`, accesos rápidos y un `CardLayout`
+central que aloja los catálogos como `JPanel` independientes. Los detalles de
+un registro se editan en un único `JDialog` reutilizable para alta y cambio.
+No crear ventanas de listado independientes ni ejecutar consultas JPA desde
+los constructores visuales.

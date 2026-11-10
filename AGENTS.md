@@ -6,7 +6,14 @@ Consultar `docs/ARQUITECTURA.md`, `docs/RF-002.md` y el esquema canónico `app/d
 
 - Java SE 17, Maven, MySQL 8, Swing, FlatLaf.
 - **Requisito obligatorio:** toda ventana/panel Swing debe ser editable mediante Eclipse WindowBuilder, con constructor público sin argumentos y GroupLayout explícito como layout predeterminado. No inicializar JPA, JDBC, red ni archivos obligatorios en constructores de vistas.
-- Reutilizar el estilo `app.view` de Kath ERP como referencia estructural, sin copiar indiscriminadamente código legado.
+- Reutilizar el patrón de `Kath_ERP/src/main/java/.../app/view/Fr_principal.java` y de los paneles de catálogo `PanelClientes` y `PanelTipoCliente`.
+- **Una sola ventana principal** con `JMenuBar`, barra de accesos rápidos y `JPanel` central con `CardLayout`. NO abrir `JFrame` para catálogos, listas, dashboards ni reportes.
+- Cada módulo de listado debe tener su propia clase `Panel<Modulo> extends JPanel` con `GroupLayout`, barra de acciones, contenido central y herramientas de filtro abajo.
+- Usar diálogos de detalle independientes (`Fr_Datos<Entidad> extends JDialog`) solo para alta, edición o inspección de un registro, reutilizando el mismo formulario para crear/editar.
+- Priorizar escritorios de 900×700 o menores: ventana principal inicial aproximada 860×600, anchura mínima no superior a 740; evitar diseños que requieran múltiples monitores o ancho fijo mayor que la pantalla.
+- El panel principal se añade al `CardLayout` y se activa desde `JMenuItem` o acceso rápido. El botón de una función pendiente debe quedar deshabilitado, no fingir que funciona.
+- Las ventanas de inicio de sesión y configuración inicial pueden ser independientes, porque son flujos previos a la ventana principal.
+- La especificación completa y obligatoria está en `docs/UI-SWING-WINDOWBUILDER.md`.
 - Javadoc en clases, métodos públicos y contratos relevantes.
 
 ## Acceso a datos

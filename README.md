@@ -46,14 +46,23 @@ Java SE 17, Maven, Swing, Eclipse WindowBuilder, GroupLayout, FlatLaf, Hibernate
 6. Introduzca la contraseña MySQL al iniciar. Hibernate valida el esquema pero no lo modifica.
 7. Registre el **primer administrador**. No existe cuenta administrativa predeterminada.
 8. Inicie sesión usando el usuario y la contraseña de aplicación recién creados.
-9. Abra **Administración de usuarios** para crear las demás cuentas.
+9. En la ventana principal, elija **Administración → Administrar usuarios**. El catálogo aparece en el área central, sin abrir otro JFrame.
 
 Si la configuración de RF-001 ya existe, la aplicación comienza directamente solicitando la contraseña MySQL; no vuelve a pedir la carpeta de XML.
 
 ## Importación en Eclipse y WindowBuilder
 
-Importe `app` como **Existing Maven Project**. Los formularios editables desde WindowBuilder están en
-`com.kathsoft.visor.app.view.configuracion` y `com.kathsoft.visor.app.view.usuario`.
+Importe `app` como **Existing Maven Project**. Los formularios y paneles editables desde WindowBuilder están en
+`com.kathsoft.visor.app.view`, `com.kathsoft.visor.app.view.configuracion` y `com.kathsoft.visor.app.view.usuario`.
+
+La interfaz sigue el patrón de Kath ERP: **una ventana principal**
+`app.view.Fr_Principal` con `JMenuBar`, barra de accesos rápidos y
+`CardLayout` central. Los módulos de lista son `JPanel` separados,
+por ejemplo `app.view.usuario.PanelUsuarios`, y los datos de un
+registro se editan desde un único diálogo modal `Fr_DatosUsuario`.
+Las funciones de CFDI no desarrolladas se muestran deshabilitadas.
+
+Guía obligatoria: [docs/UI-SWING-WINDOWBUILDER.md](docs/UI-SWING-WINDOWBUILDER.md).
 
 Abra el archivo Java con **Open With → WindowBuilder Editor → Design**. El constructor sin parámetros de cada vista no debe consultar MySQL, leer el disco ni inicializar Hibernate. GroupLayout está declarado explícitamente y FlatLaf solo se configura en `App.main`, fuera de los constructores.
 
