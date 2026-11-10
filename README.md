@@ -15,7 +15,9 @@ Java SE 17, Maven, Swing, Eclipse WindowBuilder, GroupLayout, FlatLaf, Hibernate
 - Prueba de conexión JDBC sin bloquear Swing.
 - Selección del directorio local de documentos XML.
 - Persistencia local de parámetros no secretos en `~/.visor-cfdi-xml/config.properties`.
-- Contraseña de MySQL solicitada en cada arranque; no se guarda en disco.
+- Credenciales MySQL **cifradas en el perfil local** mediante AES-256-GCM, con clave aleatoria de instalación en un archivo separado; no se vuelven a pedir en cada arranque.
+- Conexión automática a MySQL desde la pantalla de inicio; el usuario solo ingresa la contraseña de la **aplicación**.
+- Política JDBC corregida para MySQL 8: `allowPublicKeyRetrieval=true` únicamente en loopback (localhost/127.0.0.1/::1); conexiones remotas con `sslMode=VERIFY_IDENTITY` y recuperación RSA deshabilitada.
 
 ### RF-002 — Administración de usuarios
 - Arranque con Hibernate/JPA y conexión MySQL (pool HikariCP).
@@ -43,12 +45,33 @@ Java SE 17, Maven, Swing, Eclipse WindowBuilder, GroupLayout, FlatLaf, Hibernate
    ```
 
 5. En la primera ejecución, registre el servidor MySQL, compruebe su conexión y elija la carpeta de XML.
-6. Introduzca la contraseña MySQL al iniciar. Hibernate valida el esquema pero no lo modifica.
+6. En la primera configuración, introduzca la contraseña MySQL y pulse **Guardar configuración**. La aplicación verifica la conexión y la guarda cifrada. En los siguientes arranques se conecta automáticamente; Hibernate valida el esquema pero no lo modifica.
 7. Registre el **primer administrador**. No existe cuenta administrativa predeterminada.
 8. Inicie sesión usando el usuario y la contraseña de aplicación recién creados.
 9. En la ventana principal, elija **Administración → Administrar usuarios**. El catálogo aparece en el área central, sin abrir otro JFrame.
 
-Si la configuración de RF-001 ya existe, la aplicación comienza directamente solicitando la contraseña MySQL; no vuelve a pedir la carpeta de XML.
+**Migración de instalaciones existentes:** si ya existe `config.properties` de RF-001, pero no se habían guardado credenciales cifradas, la aplicación solicitará la contraseña MySQL **una sola vez** mediante «Guardar y conectar». Solo se guarda después de conectar correctamente; en las siguientes ejecuciones pasa al inicio de sesión de la aplicación sin solicitar la clave de MySQL.
+
+## Credenciales y diagnóstico de MySQL 8
+
+El archivo original `~/.visor-cfdi-xml/config.properties` sigue guardando **solo host, puerto, esquema, usuario y directorio XML**. La contraseña MySQL se cifra en archivos independientes:
+
+```text
+~/.visor-cfdi-xml/
+├── config.properties        # Parámetros no secretos RF-001
+├── database.credentials     # Contraseña cifrada AES-256-GCM
+└── connection.key           # Clave aleatoria AES (NO compartir)
+```
+
+La aplicación protege los archivos cifrados con permisos 0600 y la carpeta con 0700 cuando el sistema admite POSIX (Ubuntu/Linux/macOS con sistemas de archivos compatibles). En Windows se heredan los permisos del perfil de usuario; **no debe almacenarse esta carpeta en una ubicación compartida**. Nunca agregue estos ficheros a Git, copias de proyecto ni sincronizaciones públicas.
+
+**Límite de seguridad:** este mecanismo reproduce el enfoque de Kath ERP, pero **no es un almacén seguro del sistema operativo**: quien pueda leer tanto `database.credentials` como `connection.key` puede recuperar la contraseña. Debe usarse una cuenta MySQL con privilegios mínimos, distinta del administrador `root`. Para producción multiusuario es preferible un servicio intermedio que administre el secreto y la autorización del servidor.
+
+**Error «Public Key Retrieval is not allowed»:** MySQL 8 utiliza habitualmente `caching_sha2_password`. Una conexión TCP sin TLS puede necesitar recuperar la clave pública RSA del servidor después de un reinicio o una limpieza de la caché de autenticación. La aplicación ahora habilita `allowPublicKeyRetrieval=true` **solo en loopback**. Para conexiones externas conserva TLS con verificación de identidad: debe configurarse un certificado de servidor válido y una CA confiable. No se recomienda cambiar el usuario a `mysql_native_password` para ocultar este error.
+
+**Si cambia la contraseña de MySQL**, la conexión automática fallará, pero se mantiene el archivo cifrado. En la ventana de conexión seleccione **Actualizar contraseña**, escriba la nueva y pulse **Guardar y conectar**. Si MySQL está detenido, inicie el servicio y use **Reintentar**; no es necesario volver a escribir la clave.
+
+**Si se pierde `connection.key`** o se daña el archivo cifrado: respalde primero ambos archivos, cierre la aplicación, borre solo `database.credentials` y `connection.key` (no `config.properties` ni la carpeta XML), y vuelva a abrir el programa. Se solicitará la contraseña una vez y se generará un par nuevo. No existe mecanismo para recuperar un secreto cuya clave AES se ha perdido.
 
 ## Importación en Eclipse y WindowBuilder
 
