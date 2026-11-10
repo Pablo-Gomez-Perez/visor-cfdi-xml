@@ -1,7 +1,6 @@
 package com.kathsoft.visor.app.service.usuario;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -20,6 +19,9 @@ import com.kathsoft.visor.app.model.entity.UsuarioEntity;
 import com.kathsoft.visor.app.model.entity.UsuarioEstado;
 import com.kathsoft.visor.app.persistence.JpaContext;
 import com.kathsoft.visor.app.security.PasswordHasher;
+import com.kathsoft.visor.app.security.AutorizacionService;
+import com.kathsoft.visor.app.security.Permisos;
+import com.kathsoft.visor.app.service.rol.RolesService;
 
 /**
  * Casos de uso de RF-002. Toda operación de escritura es transaccional desde
@@ -53,6 +55,47 @@ public final class UsuariosService {
                     + " ('CONSULTA','Usuario con acceso de consulta')").executeUpdate();
             return null;
         });
+        new RolesService(jpa).inicializarCatalogo();
+    }
+
+    /**
+     * Ofrece la administración de roles sin exponer acceso JPA a Swing.
+     *
+     * @return servicio RF-003, comparte las mismas transacciones Java SE
+     */
+    public RolesService roles() {
+        return new RolesService(jpa);
+    }
+
+    /**
+     * Consulta permisos efectivos frescos para habilitar la interfaz.
+     *
+     * @param usuarioId cuenta de aplicación
+     * @return claves recurso.accion concedidas
+     */
+    public Set<String> permisosDe(Long usuarioId) {
+        return jpa.consultar(em -> AutorizacionService.permisosDe(em, usuarioId));
+    }
+
+    /**
+     * Consulta si el usuario posee una acción en su estado actual.
+     *
+     * @param usuarioId usuario activo
+     * @param permiso clave del privilegio
+     * @return true si puede ejecutarla
+     */
+    public boolean tienePermiso(Long usuarioId, String permiso) {
+        return jpa.consultar(em -> AutorizacionService.tiene(em, usuarioId, permiso));
+    }
+
+    /**
+     * Recupera las claves de roles disponibles para creación o reasignación.
+     *
+     * @param operadorId usuario autorizado
+     * @return claves de roles reales, incluidos los personalizados
+     */
+    public List<String> listarClavesRoles(Long operadorId) {
+        return roles().listarClavesAsignables(operadorId);
     }
 
     /**
@@ -138,7 +181,7 @@ public final class UsuariosService {
      */
     public List<UsuarioListado> listar(Long administradorId) {
         return jpa.consultar(em -> {
-            asegurarAdministrador(em, administradorId);
+            AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_CONSULTAR);
             return em.createQuery("select distinct u from UsuarioEntity u left join fetch u.roles",
                     UsuarioEntity.class).getResultList().stream()
                     .map(u -> new UsuarioListado(u.getId(), u.getNombreCompleto(), u.getLogin(),
@@ -151,7 +194,8 @@ public final class UsuariosService {
     }
 
     /**
-     * Crea una cuenta ADMIN o CONSULTA tras verificar al operador.
+     * Crea una cuenta con cualquier rol existente tras verificar los
+     * permisos para crear usuarios y asignar ADMIN cuando corresponda.
      *
      * @param administradorId identificador del administrador autenticado
      * @param solicitud datos nuevos
@@ -162,7 +206,10 @@ public final class UsuariosService {
         PasswordHasher.validarNueva(clave);
         String hash = PasswordHasher.crearHash(clave);
         jpa.enTransaccion(em -> {
-            asegurarAdministrador(em, administradorId);
+            AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_CREAR);
+            if (ADMIN.equals(solicitud.rol())) {
+                AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_ASIGNAR_ADMIN);
+            }
             RolEntity rol = obtenerRolBloqueado(em, solicitud.rol());
             UsuarioEntity usuario = nuevoUsuario(solicitud, hash);
             usuario.getRoles().add(rol);
@@ -196,7 +243,7 @@ public final class UsuariosService {
         String nuevoLogin = loginNormalizado(login);
         String nuevoCorreo = correoNormalizado(correo);
         jpa.enTransaccion(em -> {
-            asegurarAdministrador(em, administradorId);
+            AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_MODIFICAR);
             UsuarioEntity usuario = buscarUsuario(em, usuarioId);
             String loginAnterior = usuario.getLogin();
             Long duplicados = em.createQuery(
@@ -235,7 +282,7 @@ public final class UsuariosService {
             throw new IllegalArgumentException("Estado no permitido para esta operación");
         }
         jpa.enTransaccion(em -> {
-            asegurarAdministrador(em, administradorId);
+            AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_CAMBIAR_ESTADO);
             bloquearRolAdmin(em);
             UsuarioEntity usuario = buscarUsuarioConRoles(em, usuarioId);
             if (nuevoEstado == UsuarioEstado.INACTIVO) {
@@ -248,8 +295,8 @@ public final class UsuariosService {
     }
 
     /**
-     * Sustituye el rol básico de una cuenta. La administración granular de
-     * permisos se implementará en RF-003.
+     * Sustituye el rol de una cuenta por otro del catálogo. Requiere
+     * autorización independiente para asignar ADMIN.
      *
      * @param administradorId identificador del administrador
      * @param usuarioId cuenta objetivo
@@ -258,9 +305,12 @@ public final class UsuariosService {
     public void cambiarRol(Long administradorId, Long usuarioId, String nuevaClave) {
         validarRol(nuevaClave);
         jpa.enTransaccion(em -> {
-            asegurarAdministrador(em, administradorId);
+            AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_ASIGNAR_ROL);
             bloquearRolAdmin(em);
             UsuarioEntity usuario = buscarUsuarioConRoles(em, usuarioId);
+            if (ADMIN.equals(nuevaClave)) {
+                AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_ASIGNAR_ADMIN);
+            }
             if (!ADMIN.equals(nuevaClave)) {
                 verificarNoEsUltimoAdmin(em, usuario);
             }
@@ -283,7 +333,7 @@ public final class UsuariosService {
         PasswordHasher.validarNueva(claveNueva);
         String hash = PasswordHasher.crearHash(claveNueva);
         jpa.enTransaccion(em -> {
-            asegurarAdministrador(em, administradorId);
+            AutorizacionService.exigir(em, administradorId, Permisos.USUARIOS_RESTABLECER_CLAVE);
             UsuarioEntity usuario = buscarUsuario(em, usuarioId);
             usuario.setHashContrasena(hash);
             registrarEvento(em, administradorId, usuarioId, "RESTABLECER_CONTRASENA");
@@ -340,8 +390,8 @@ public final class UsuariosService {
     }
 
     private static void validarRol(String clave) {
-        if (!ADMIN.equals(clave) && !CONSULTA.equals(clave)) {
-            throw new IllegalArgumentException("El rol solicitado no está permitido");
+        if (clave == null || !clave.matches("[A-Z][A-Z0-9_]{2,39}")) {
+            throw new IllegalArgumentException("La clave del rol debe ser válida y estar en mayúsculas");
         }
     }
 
@@ -359,22 +409,6 @@ public final class UsuariosService {
 
     private static void bloquearRolAdmin(EntityManager em) {
         obtenerRolBloqueado(em, ADMIN);
-    }
-
-    private static void asegurarAdministrador(EntityManager em, Long administradorId) {
-        if (administradorId == null) {
-            throw new SecurityException("Se requiere iniciar sesión como administrador");
-        }
-        Long permitidos = em.createQuery(
-                "select count(distinct u) from UsuarioEntity u join u.roles r "
-                + "where u.id = :id and u.estado = :estado and r.clave = :rol", Long.class)
-                .setParameter("id", administradorId)
-                .setParameter("estado", UsuarioEstado.ACTIVO)
-                .setParameter("rol", ADMIN)
-                .getSingleResult();
-        if (permitidos != 1L) {
-            throw new SecurityException("La cuenta no tiene permisos administrativos");
-        }
     }
 
     private static UsuarioEntity buscarUsuario(EntityManager em, Long usuarioId) {

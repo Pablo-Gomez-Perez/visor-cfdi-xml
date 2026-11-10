@@ -17,6 +17,7 @@ public final class Permisos {
     public static final String USUARIOS_CAMBIAR_ESTADO = "USUARIOS.CAMBIAR_ESTADO";
     public static final String USUARIOS_ASIGNAR_ROL = "USUARIOS.ASIGNAR_ROL";
     public static final String USUARIOS_RESTABLECER_CLAVE = "USUARIOS.RESTABLECER_CLAVE";
+    public static final String USUARIOS_ASIGNAR_ADMIN = "USUARIOS.ASIGNAR_ADMIN";
 
     public static final String ROLES_CONSULTAR = "ROLES.CONSULTAR";
     public static final String ROLES_CREAR = "ROLES.CREAR";
@@ -37,6 +38,7 @@ public final class Permisos {
         new DefinicionPermiso("USUARIOS", "CAMBIAR_ESTADO", "Activar e inactivar usuarios"),
         new DefinicionPermiso("USUARIOS", "ASIGNAR_ROL", "Asignar roles a usuarios"),
         new DefinicionPermiso("USUARIOS", "RESTABLECER_CLAVE", "Restablecer contraseñas de usuarios"),
+        new DefinicionPermiso("USUARIOS", "ASIGNAR_ADMIN", "Asignar el rol privilegiado ADMIN (operación crítica)"),
         new DefinicionPermiso("ROLES", "CONSULTAR", "Consultar el catálogo de roles"),
         new DefinicionPermiso("ROLES", "CREAR", "Crear roles personalizados"),
         new DefinicionPermiso("ROLES", "MODIFICAR", "Editar la descripción de roles"),
