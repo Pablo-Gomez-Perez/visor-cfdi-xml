@@ -17,6 +17,7 @@ import javax.swing.border.EmptyBorder;
 
 import com.kathsoft.visor.app.model.dto.UsuarioSesion;
 import com.kathsoft.visor.app.service.usuario.UsuariosService;
+import com.kathsoft.visor.app.view.Fr_Principal;
 
 /**
  * Autenticación de usuarios de la aplicación (distinta de la clave MySQL).
