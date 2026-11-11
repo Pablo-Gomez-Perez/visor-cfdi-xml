@@ -113,11 +113,6 @@ public class PanelTerceros extends JPanel {
             filtrar();
             txfBuscar.requestFocusInWindow();
         });
-        txfBuscar.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
-            @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
-            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
-        });
         lblEstado = new JLabel("Seleccione un contribuyente para consultar terceros.");
         GroupLayout layout = new GroupLayout(this);
         setLayout(layout);
