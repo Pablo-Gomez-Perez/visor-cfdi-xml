@@ -204,6 +204,47 @@ class ContribuyentesServiceIT {
             assertFalse(usuarios.tienePermiso(admin.id(), Permisos.CONTRIBUYENTES_CREAR));
             roles.guardarPermisos(admin.id(), rolAdmin, actuales);
 
+            // Un rol con solo CREATE puede dar altas sin consultar a otros
+            // contribuyentes: los permisos no se suponen implícitamente.
+            Short capturistaRol = roles.crear(admin.id(), "CAPTURISTA",
+                    "Alta sin acceso al catálogo");
+            Short crearContrib = roles.cargarMatriz(admin.id(), capturistaRol).permisos().stream()
+                    .filter(p -> Permisos.CONTRIBUYENTES_CREAR.equals(
+                            p.recurso() + "." + p.accion()))
+                    .findFirst().orElseThrow().id();
+            roles.guardarPermisos(admin.id(), capturistaRol, Set.of(crearContrib));
+            usuarios.registrar(admin.id(),
+                    new SolicitudUsuario("Capturista", "capturista", null, "CAPTURISTA"),
+                    "claveCapturista#2026".toCharArray());
+            Long capturista = usuarios.listar(admin.id()).stream()
+                    .filter(u -> "capturista".equals(u.login())).findFirst().orElseThrow().id();
+            Long c3 = contribuyentes.registrar(capturista,
+                    new SolicitudContribuyente("ghi010101ab3", "Empresa Tres", null, null));
+            assertTrue(contribuyentes.obtener(admin.id(), c3).activo());
+            assertThrows(SecurityException.class, () -> contribuyentes.listar(capturista));
+            assertThrows(SecurityException.class,
+                    () -> contribuyentes.obtener(capturista, c3));
+
+            // Simula despliegue de una feat nueva: el permiso no existía aún.
+            // Solo ese privilegio nuevo se concede a ADMIN en el bootstrap.
+            jpa.enTransaccion(em -> {
+                em.createNativeQuery(
+                    "DELETE FROM rol_permiso WHERE permiso_id IN "
+                    + "(SELECT id FROM permiso WHERE recurso = 'CONTRIBUYENTES' "
+                    + "AND accion = 'CAMBIAR_ESTADO')").executeUpdate();
+                em.createNativeQuery(
+                    "DELETE FROM permiso WHERE recurso = 'CONTRIBUYENTES' "
+                    + "AND accion = 'CAMBIAR_ESTADO'").executeUpdate();
+                return null;
+            });
+            assertFalse(usuarios.tienePermiso(admin.id(),
+                    Permisos.CONTRIBUYENTES_CAMBIAR_ESTADO));
+            usuarios.inicializarRoles();
+            assertTrue(usuarios.tienePermiso(admin.id(),
+                    Permisos.CONTRIBUYENTES_CAMBIAR_ESTADO));
+            assertFalse(usuarios.tienePermiso(capturista,
+                    Permisos.CONTRIBUYENTES_CAMBIAR_ESTADO));
+
             long bitacoras = jpa.consultar(em -> ((Number) em.createNativeQuery(
                     "select count(*) from bitacora_evento "
                     + "where entidad = 'contribuyente'").getSingleResult()).longValue());
