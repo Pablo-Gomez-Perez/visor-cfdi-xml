@@ -47,6 +47,8 @@ public class PanelTerceros extends JPanel {
     private JButton btnEditar;
     private JButton btnRoles;
     private JButton btnActualizar;
+    private JButton btnBuscar;
+    private JButton btnLimpiar;
     private JTable tabla;
     private DefaultTableModel modelo;
     private TableRowSorter<DefaultTableModel> filtro;
@@ -102,6 +104,15 @@ public class PanelTerceros extends JPanel {
         JScrollPane scroll = new JScrollPane(tabla);
         JLabel lblBuscar = new JLabel("Buscar");
         txfBuscar = new JTextField(22);
+        btnBuscar = new JButton("Buscar");
+        btnLimpiar = new JButton("Limpiar");
+        txfBuscar.addActionListener(e -> filtrar());
+        btnBuscar.addActionListener(e -> filtrar());
+        btnLimpiar.addActionListener(e -> {
+            txfBuscar.setText("");
+            filtrar();
+            txfBuscar.requestFocusInWindow();
+        });
         txfBuscar.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
             @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
@@ -118,7 +129,9 @@ public class PanelTerceros extends JPanel {
             .addComponent(acciones)
             .addComponent(scroll, GroupLayout.DEFAULT_SIZE, 450, Short.MAX_VALUE)
             .addGroup(layout.createSequentialGroup().addComponent(lblBuscar)
-                .addComponent(txfBuscar, GroupLayout.PREFERRED_SIZE, 230, GroupLayout.PREFERRED_SIZE))
+                .addComponent(txfBuscar, GroupLayout.PREFERRED_SIZE, 230, GroupLayout.PREFERRED_SIZE)
+                .addComponent(btnBuscar)
+                .addComponent(btnLimpiar))
             .addComponent(lblEstado));
         layout.setVerticalGroup(layout.createSequentialGroup()
             .addComponent(titulo)
@@ -130,7 +143,8 @@ public class PanelTerceros extends JPanel {
             .addComponent(scroll, GroupLayout.DEFAULT_SIZE, 220, Short.MAX_VALUE)
             .addGroup(layout.createParallelGroup(GroupLayout.Alignment.BASELINE)
                 .addComponent(lblBuscar).addComponent(txfBuscar,
-                    GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
+                    GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
+                .addComponent(btnBuscar).addComponent(btnLimpiar))
             .addComponent(lblEstado));
         btnAgregar.addActionListener(e -> abrir(null, 0));
         btnEditar.addActionListener(e -> { TerceroListado t = seleccionado(); if (t != null) abrir(t, 0); });
