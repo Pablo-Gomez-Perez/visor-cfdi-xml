@@ -272,6 +272,12 @@ public class PanelContribuyentes extends JPanel {
                 try {
                     List<ContribuyenteListado> datos = get();
                     modeloContribuyentes.setRowCount(0);
+                    if (!privilegios.contains(Permisos.CONTRIBUYENTES_CONSULTAR)) {
+                        // Evitar que un worker previo vuelva a publicar filas
+                        // después de revocarse el permiso en la pantalla.
+                        lblResultado.setText("Sin permiso para consultar contribuyentes");
+                        return;
+                    }
                     for (ContribuyenteListado c : datos) {
                         modeloContribuyentes.addRow(new Object[] {
                                 c.id(), c.rfc(), c.nombreRazonSocial(),
