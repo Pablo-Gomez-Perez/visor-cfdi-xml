@@ -24,6 +24,7 @@ import com.kathsoft.visor.app.security.Permisos;
 import com.kathsoft.visor.app.service.rol.RolesService;
 import com.kathsoft.visor.app.service.contribuyente.ContribuyentesService;
 import com.kathsoft.visor.app.service.tercero.TercerosService;
+import com.kathsoft.visor.app.service.periodo.PeriodosFiscalesService;
 
 /**
  * Casos de uso de RF-002. Toda operación de escritura es transaccional desde
@@ -82,6 +83,11 @@ public final class UsuariosService {
     /** @return servicio RF-005 con el mismo contexto transaccional */
     public TercerosService terceros() {
         return new TercerosService(jpa);
+    }
+
+    /** @return servicio RF-006 de consultas por periodos y fechas fiscales */
+    public PeriodosFiscalesService periodosFiscales() {
+        return new PeriodosFiscalesService(jpa);
     }
 
     /**

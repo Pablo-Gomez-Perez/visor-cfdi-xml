@@ -27,6 +27,8 @@ import com.kathsoft.visor.app.service.contribuyente.ContribuyentesService;
 import com.kathsoft.visor.app.view.contribuyente.PanelContribuyentes;
 import com.kathsoft.visor.app.service.tercero.TercerosService;
 import com.kathsoft.visor.app.view.tercero.PanelTerceros;
+import com.kathsoft.visor.app.service.periodo.PeriodosFiscalesService;
+import com.kathsoft.visor.app.view.periodo.PanelPeriodosFiscales;
 import com.kathsoft.visor.app.service.usuario.UsuariosService;
 import com.kathsoft.visor.app.view.rol.PanelRoles;
 import com.kathsoft.visor.app.view.usuario.Fr_Login;
@@ -47,11 +49,13 @@ public class Fr_Principal extends JFrame {
     private static final String CARD_ROLES = "panelRoles";
     private static final String CARD_CONTRIBUYENTES = "panelContribuyentes";
     private static final String CARD_TERCEROS = "panelTerceros";
+    private static final String CARD_PERIODOS = "panelPeriodos";
 
     private UsuariosService usuarios;
     private RolesService roles;
     private ContribuyentesService contribuyentes;
     private TercerosService terceros;
+    private PeriodosFiscalesService periodos;
     private UsuarioSesion sesion;
 
     private JMenuBar barraMenu;
@@ -64,6 +68,7 @@ public class Fr_Principal extends JFrame {
     private JMenuItem opcionRoles;
     private JMenuItem opcionContribuyentes;
     private JMenuItem opcionTerceros;
+    private JMenuItem opcionPeriodos;
     private JMenuItem opcionAdministrarXml;
     private JMenuItem opcionCargarXml;
     private JMenuItem opcionActualizarPermisos;
@@ -79,6 +84,7 @@ public class Fr_Principal extends JFrame {
     private PanelRoles panelRoles;
     private PanelContribuyentes panelContribuyentes;
     private PanelTerceros panelTerceros;
+    private PanelPeriodosFiscales panelPeriodos;
     private JButton btnInicio;
     private JButton btnContribuyentes;
     private JButton btnAdministrarXml;
@@ -105,6 +111,7 @@ public class Fr_Principal extends JFrame {
         this.roles = usuarios == null ? null : usuarios.roles();
         this.contribuyentes = usuarios == null ? null : usuarios.contribuyentes();
         this.terceros = usuarios == null ? null : usuarios.terceros();
+        this.periodos = usuarios == null ? null : usuarios.periodosFiscales();
         this.sesion = sesion;
         if (sesion != null) {
             lblEstadoSesion.setText("Sesión: " + sesion.nombre() + " (" + sesion.login() + ")");
@@ -150,6 +157,10 @@ public class Fr_Principal extends JFrame {
 
         menuCfdi = new JMenu("CFDI");
         barraMenu.add(menuCfdi);
+        opcionPeriodos = new JMenuItem("Consultar periodos");
+        opcionPeriodos.setEnabled(false);
+        opcionPeriodos.addActionListener(e -> actualizarPermisos(CARD_PERIODOS));
+        menuCfdi.add(opcionPeriodos);
         opcionAdministrarXml = new JMenuItem("Administrar XML");
         opcionAdministrarXml.setEnabled(false);
         opcionAdministrarXml.setToolTipText("Disponible cuando se implemente el módulo de CFDI");
@@ -207,6 +218,8 @@ public class Fr_Principal extends JFrame {
         panelPrincipalContenedor.add(panelContribuyentes, CARD_CONTRIBUYENTES);
         panelTerceros = new PanelTerceros();
         panelPrincipalContenedor.add(panelTerceros, CARD_TERCEROS);
+        panelPeriodos = new PanelPeriodosFiscales();
+        panelPrincipalContenedor.add(panelPeriodos, CARD_PERIODOS);
         cardLayout.show(panelPrincipalContenedor, CARD_INICIO);
 
         panelEstado = new JPanel();
@@ -251,7 +264,7 @@ public class Fr_Principal extends JFrame {
      * @param destino tarjeta requerida, o null para solo refrescar menús
      */
     private void actualizarPermisos(String destino) {
-        if (sesion == null || usuarios == null || roles == null || contribuyentes == null || terceros == null) {
+        if (sesion == null || usuarios == null || roles == null || contribuyentes == null || terceros == null || periodos == null) {
             return;
         }
         opcionActualizarPermisos.setEnabled(false);
@@ -274,12 +287,23 @@ public class Fr_Principal extends JFrame {
                     boolean verTerceros = permisos.contains(Permisos.TERCEROS_CONSULTAR)
                             && permisos.contains(Permisos.CONTRIBUYENTES_CONSULTAR);
                     opcionTerceros.setEnabled(verTerceros);
+                    boolean verPeriodos = permisos.contains(Permisos.PERIODOS_FISCALES_CONSULTAR);
+                    opcionPeriodos.setEnabled(verPeriodos);
+                    panelPeriodos.configurar(periodos, sesion, permisos);
                     btnContribuyentes.setEnabled(verContribuyentes);
                     panelUsuarios.configurar(usuarios, sesion, permisos);
                     panelRoles.configurar(roles, sesion, permisos);
                     panelContribuyentes.configurar(contribuyentes, sesion, permisos);
                     panelTerceros.configurar(terceros, contribuyentes, sesion, permisos);
-                    if (CARD_USUARIOS.equals(destino)) {
+                    if (CARD_PERIODOS.equals(destino)) {
+                        if (verPeriodos) {
+                            cardLayout.show(panelPrincipalContenedor, CARD_PERIODOS);
+                            panelPeriodos.recargar();
+                        } else {
+                            JOptionPane.showMessageDialog(Fr_Principal.this,
+                                    "No tiene permiso para consultar periodos.");
+                        }
+                    } else if (CARD_USUARIOS.equals(destino)) {
                         if (verUsuarios) {
                             cardLayout.show(panelPrincipalContenedor, CARD_USUARIOS);
                             panelUsuarios.recargar();
@@ -319,6 +343,8 @@ public class Fr_Principal extends JFrame {
                     opcionRoles.setEnabled(false);
                     opcionContribuyentes.setEnabled(false);
                     opcionTerceros.setEnabled(false);
+                    opcionPeriodos.setEnabled(false);
+                    panelPeriodos.configurar(null, null, Set.of());
                     btnContribuyentes.setEnabled(false);
                     JOptionPane.showMessageDialog(Fr_Principal.this,
                             "No se pudieron actualizar los permisos. Revise la conexión MySQL.",
