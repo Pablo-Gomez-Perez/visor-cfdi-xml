@@ -58,7 +58,7 @@ public class PanelImportacionCfdi extends JPanel {
     }
 
     private void inicializarComponentes() {
-        JLabel titulo = new JLabel("Importación de CFDI XML");
+        JLabel titulo = new JLabel("Importación de CFDI y retenciones XML");
         JLabel lblContribuyente = new JLabel("Contribuyente");
         JLabel lblFuentes = new JLabel("Archivos y carpetas seleccionados");
         cmbContribuyente = new JComboBox<>();
@@ -259,6 +259,7 @@ public class PanelImportacionCfdi extends JPanel {
 
     private void error(Throwable ex) {
         Throwable causa = ex == null ? new IllegalStateException("Error desconocido") : ex;
+        causa.printStackTrace(System.err);
         JOptionPane.showMessageDialog(this,
                 "No se completó la importación. Los lotes confirmados no se revierten.\n"
                 + causa.getClass().getSimpleName() + ": " + causa.getMessage(),

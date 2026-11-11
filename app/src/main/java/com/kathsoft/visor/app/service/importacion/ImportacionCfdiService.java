@@ -336,8 +336,16 @@ public final class ImportacionCfdiService {
                         call.setString(7, p.origen().getFileName().toString());
                         call.setString(8, p.origen().toAbsolutePath().toString());
                         call.setString(9, p.documento().json());
-                        call.execute();
-                        resultado[0] += call.getInt(10);
+                        try {
+                            call.execute();
+                            resultado[0] += call.getInt(10);
+                        } catch (SQLException er) {
+                            throw new SQLException("RF-007: fallo importando "
+                                    + p.origen().getFileName() + " (ordinal "
+                                    + p.ordinal() + ", clase " + p.documento().clase()
+                                    + "): " + er.getMessage(), er.getSQLState(),
+                                    er.getErrorCode(), er);
+                        }
                     }
                 } finally {
                     // Cada CallableStatement pertenece a este único hilo y
