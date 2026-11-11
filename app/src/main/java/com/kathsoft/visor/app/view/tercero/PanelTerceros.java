@@ -30,6 +30,8 @@ import com.kathsoft.visor.app.model.dto.UsuarioSesion;
 import com.kathsoft.visor.app.security.Permisos;
 import com.kathsoft.visor.app.service.contribuyente.ContribuyentesService;
 import com.kathsoft.visor.app.service.tercero.TercerosService;
+import javax.swing.GroupLayout.Alignment;
+import javax.swing.LayoutStyle.ComponentPlacement;
 
 /**
  * RF-005: catálogo de terceros filtrado por contribuyente autorizado.
@@ -47,6 +49,8 @@ public class PanelTerceros extends JPanel {
     private JButton btnEditar;
     private JButton btnRoles;
     private JButton btnActualizar;
+    private JButton btnBuscar;
+    private JButton btnLimpiar;
     private JTable tabla;
     private DefaultTableModel modelo;
     private TableRowSorter<DefaultTableModel> filtro;
@@ -102,36 +106,53 @@ public class PanelTerceros extends JPanel {
         JScrollPane scroll = new JScrollPane(tabla);
         JLabel lblBuscar = new JLabel("Buscar");
         txfBuscar = new JTextField(22);
-        txfBuscar.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
-            @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
-            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { filtrar(); }
+        btnBuscar = new JButton("Buscar");
+        btnLimpiar = new JButton("Limpiar");
+        txfBuscar.addActionListener(e -> filtrar());
+        btnBuscar.addActionListener(e -> filtrar());
+        btnLimpiar.addActionListener(e -> {
+            txfBuscar.setText("");
+            filtrar();
+            txfBuscar.requestFocusInWindow();
         });
         lblEstado = new JLabel("Seleccione un contribuyente para consultar terceros.");
         GroupLayout layout = new GroupLayout(this);
+        layout.setHorizontalGroup(
+        	layout.createParallelGroup(Alignment.LEADING)
+        		.addComponent(titulo)
+        		.addGroup(layout.createSequentialGroup()
+        			.addComponent(lblContribuyente)
+        			.addComponent(cmbContribuyente, 0, 678, Short.MAX_VALUE))
+        		.addComponent(acciones, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
+        		.addComponent(scroll, GroupLayout.DEFAULT_SIZE, 777, Short.MAX_VALUE)
+        		.addGroup(layout.createSequentialGroup()
+        			.addComponent(lblBuscar)
+        			.addPreferredGap(ComponentPlacement.RELATED)
+        			.addComponent(txfBuscar, GroupLayout.DEFAULT_SIZE, 558, Short.MAX_VALUE)
+        			.addPreferredGap(ComponentPlacement.RELATED)
+        			.addComponent(btnBuscar)
+        			.addPreferredGap(ComponentPlacement.RELATED)
+        			.addComponent(btnLimpiar))
+        		.addComponent(lblEstado)
+        );
+        layout.setVerticalGroup(
+        	layout.createParallelGroup(Alignment.LEADING)
+        		.addGroup(layout.createSequentialGroup()
+        			.addComponent(titulo)
+        			.addGroup(layout.createParallelGroup(Alignment.BASELINE)
+        				.addComponent(lblContribuyente)
+        				.addComponent(cmbContribuyente, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
+        			.addComponent(acciones, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
+        			.addComponent(scroll, GroupLayout.DEFAULT_SIZE, 260, Short.MAX_VALUE)
+        			.addGroup(layout.createParallelGroup(Alignment.BASELINE)
+        				.addComponent(lblBuscar)
+        				.addComponent(txfBuscar, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
+        				.addComponent(btnLimpiar)
+        				.addComponent(btnBuscar))
+        			.addComponent(lblEstado))
+        );
         setLayout(layout);
         layout.setAutoCreateGaps(true);
-        layout.setHorizontalGroup(layout.createParallelGroup(GroupLayout.Alignment.LEADING)
-            .addComponent(titulo)
-            .addGroup(layout.createSequentialGroup().addComponent(lblContribuyente)
-                .addComponent(cmbContribuyente, GroupLayout.DEFAULT_SIZE, 280, Short.MAX_VALUE))
-            .addComponent(acciones)
-            .addComponent(scroll, GroupLayout.DEFAULT_SIZE, 450, Short.MAX_VALUE)
-            .addGroup(layout.createSequentialGroup().addComponent(lblBuscar)
-                .addComponent(txfBuscar, GroupLayout.PREFERRED_SIZE, 230, GroupLayout.PREFERRED_SIZE))
-            .addComponent(lblEstado));
-        layout.setVerticalGroup(layout.createSequentialGroup()
-            .addComponent(titulo)
-            .addGroup(layout.createParallelGroup(GroupLayout.Alignment.BASELINE)
-                .addComponent(lblContribuyente).addComponent(cmbContribuyente,
-                    GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-            .addComponent(acciones, GroupLayout.PREFERRED_SIZE,
-                    GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
-            .addComponent(scroll, GroupLayout.DEFAULT_SIZE, 220, Short.MAX_VALUE)
-            .addGroup(layout.createParallelGroup(GroupLayout.Alignment.BASELINE)
-                .addComponent(lblBuscar).addComponent(txfBuscar,
-                    GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
-            .addComponent(lblEstado));
         btnAgregar.addActionListener(e -> abrir(null, 0));
         btnEditar.addActionListener(e -> { TerceroListado t = seleccionado(); if (t != null) abrir(t, 0); });
         btnRoles.addActionListener(e -> { TerceroListado t = seleccionado(); if (t != null) abrir(t, 1); });
