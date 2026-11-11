@@ -42,7 +42,7 @@ import jakarta.persistence.EntityManager;
 /**
  * RF-007: importación con lectura concurrente y escritura JDBC transaccional.
  *
- * <p>Máximo dos parsers, cuatro tareas pendientes y 16 documentos por lote.
+ * <p>Máximo dos parsers, cuatro tareas pendientes y ocho documentos por lote.
  * No se construye una lista global de archivos ni se comparte EntityManager,
  * XMLStreamReader, Connection ni CallableStatement entre hilos. Un error
  * revierte el lote actual; los lotes anteriormente confirmados permanecen.</p>
@@ -51,7 +51,7 @@ public final class ImportacionCfdiService {
     private static final long MAX_BYTES = 8L * 1024 * 1024;
     private static final int HILOS = 2;
     private static final int EN_VUELO = 4;
-    private static final int TAMANO_LOTE = 16;
+    private static final int TAMANO_LOTE = 8;
     private static final String NOMBRE_REPOSITORIO = "CFDI_LOCAL_RF007";
     private final JpaContext jpa;
     private final Path repositorio;
@@ -190,10 +190,12 @@ public final class ImportacionCfdiService {
             finalizar(lote, "FINALIZADO");
             return new Resultado(lote, contadores[0], contadores[2], contadores[3]);
         } catch (IOException ex) {
-            finalizar(lote, contadores[1] > 0 ? "PARCIAL" : "ERROR");
-            throw new UncheckedIOException("Error de archivos en importación " + lote, ex);
+            UncheckedIOException fallo = new UncheckedIOException(
+                    "Error de archivos en importación " + lote, ex);
+            registrarFallo(lote, contadores[1] > 0, fallo);
+            throw fallo;
         } catch (RuntimeException ex) {
-            finalizar(lote, contadores[1] > 0 ? "PARCIAL" : "ERROR");
+            registrarFallo(lote, contadores[1] > 0, ex);
             throw ex;
         } finally {
             ejecutor.shutdownNow();
@@ -396,6 +398,14 @@ public final class ImportacionCfdiService {
                     .getSingleResult()).longValue();
             return new long[] {lote, repo};
         });
+    }
+
+    private void registrarFallo(long lote, boolean parcial, RuntimeException original) {
+        try {
+            finalizar(lote, parcial ? "PARCIAL" : "ERROR");
+        } catch (RuntimeException falloAuditoria) {
+            original.addSuppressed(falloAuditoria);
+        }
     }
 
     private void finalizar(long lote, String estado) {

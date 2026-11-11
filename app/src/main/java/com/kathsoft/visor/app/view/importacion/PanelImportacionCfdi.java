@@ -203,6 +203,8 @@ public class PanelImportacionCfdi extends JPanel {
                 chkSubcarpetas.isSelected());
         cancelacion = new AtomicBoolean();
         AtomicBoolean bandera = cancelacion;
+        long operadorId = sesion.id();
+        ImportacionCfdiService importador = servicio;
         ocupado = true;
         progreso.setIndeterminate(true);
         progreso.setString("Procesando...");
@@ -210,7 +212,7 @@ public class PanelImportacionCfdi extends JPanel {
         habilitar();
         new SwingWorker<Resultado, Avance>() {
             @Override protected Resultado doInBackground() {
-                return servicio.importar(sesion.id(), solicitud,
+                return importador.importar(operadorId, solicitud,
                         avance -> publish(avance), bandera::get);
             }
             @Override protected void process(List<Avance> avances) {
