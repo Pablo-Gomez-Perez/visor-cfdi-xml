@@ -119,6 +119,18 @@ public final class TercerosService {
             AutorizacionService.exigir(em, operadorId, Permisos.TERCEROS_ASIGNAR_ROLES);
             exigirAlcance(em, operadorId, contribuyenteId);
             buscar(em, terceroId, false);
+            // No permitir vincular por adivinación de ID una contraparte
+            // perteneciente a un contribuyente fuera del alcance del operador.
+            List<Long> titularesPrevios = em.createQuery(
+                    "select distinct r.id.contribuyenteId from ContribuyenteTerceroRolEntity r "
+                    + "where r.id.terceroId = :id", Long.class)
+                    .setParameter("id", terceroId).getResultList();
+            if (titularesPrevios.isEmpty()) {
+                throw new SecurityException("No se permite vincular un tercero sin relación previa");
+            }
+            for (Long titularPrevio : titularesPrevios) {
+                exigirAlcance(em, operadorId, titularPrevio);
+            }
             ContribuyenteTerceroRolId id =
                     new ContribuyenteTerceroRolId(contribuyenteId, terceroId, funcion);
             if (em.find(ContribuyenteTerceroRolEntity.class, id) == null) {
