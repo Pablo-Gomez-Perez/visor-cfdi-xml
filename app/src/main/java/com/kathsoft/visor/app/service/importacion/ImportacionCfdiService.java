@@ -296,6 +296,12 @@ public final class ImportacionCfdiService {
             Long usuario, long contribuyente, long repo, long lote) {
         if (pendientes.isEmpty()) return;
         verificarCancelacion(cancelar);
+        // Preparar archivos antes de ocupar una conexión JDBC; si la BD
+        // revierte, los objetos huérfanos podrán recolectarse después.
+        for (Preparado p : pendientes) {
+            verificarCancelacion(cancelar);
+            archivar(p);
+        }
         int[] duplicados = jpa.enTransaccion(em -> {
             exigirAcceso(em, usuario, contribuyente);
             int[] resultado = {0};
@@ -305,7 +311,6 @@ public final class ImportacionCfdiService {
                     call.registerOutParameter(10, Types.TINYINT);
                     for (Preparado p : pendientes) {
                         verificarCancelacion(cancelar);
-                        archivar(p);
                         call.setLong(1, lote);
                         call.setInt(2, p.ordinal());
                         call.setLong(3, repo);
