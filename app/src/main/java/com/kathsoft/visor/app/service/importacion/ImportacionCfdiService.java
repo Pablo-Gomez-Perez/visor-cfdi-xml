@@ -343,8 +343,10 @@ public final class ImportacionCfdiService {
                             throw new SQLException("RF-007: fallo importando "
                                     + p.origen().getFileName() + " (ordinal "
                                     + p.ordinal() + ", clase " + p.documento().clase()
-                                    + "): " + er.getMessage(), er.getSQLState(),
-                                    er.getErrorCode(), er);
+                                    + ", tipo " + p.documento().tipo() + "): "
+                                    + diagnosticarErrorProcedimiento(
+                                            p.documento().tipo(), er.getMessage()),
+                                    er.getSQLState(), er.getErrorCode(), er);
                         }
                     }
                 } finally {
@@ -363,6 +365,30 @@ public final class ImportacionCfdiService {
         pendientes.clear();
         progreso.accept(new Avance(contadores[0], contadores[1],
                 contadores[2], contadores[3], ultimo.origen().getFileName().toString()));
+    }
+
+    /**
+     * Añade una orientación operativa cuando una rutina antigua de RF-007
+     * (que solo admitía I/E/T) rechaza un CFDI que ya superó el parser Java.
+     *
+     * <p>La pista no sustituye el error original: el mismo SIGNAL puede
+     * tener otras causas y solo SHOW CREATE PROCEDURE permite confirmarlo.</p>
+     *
+     * @param tipo tipo fiscal previamente leído del XML
+     * @param mensaje mensaje original enviado por MySQL
+     * @return error conservado, con pasos de diagnóstico cuando corresponda
+     */
+    static String diagnosticarErrorProcedimiento(String tipo, String mensaje) {
+        String sql = mensaje == null ? "Error SQL sin descripción" : mensaje;
+        if (("P".equals(tipo) || "N".equals(tipo))
+                && sql.contains("CFDI incompleto o version/tipo no admitido")) {
+            return sql + ". Posible procedimiento MySQL RF-007 desactualizado: "
+                    + "la versión inicial de sp_rf007_importar_cfdi solo admite I/E/T. "
+                    + "Compruebe SHOW CREATE PROCEDURE visor_cfdi.sp_rf007_importar_cfdi "
+                    + "y confirme que incluya I/E/T/P/N. Si no, instale la versión "
+                    + "de RF-007 etapa 2 y los procedimientos auxiliares.";
+        }
+        return sql;
     }
 
     private void archivar(Preparado preparado) {
