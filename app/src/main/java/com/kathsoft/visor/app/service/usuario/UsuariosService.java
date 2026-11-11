@@ -23,6 +23,7 @@ import com.kathsoft.visor.app.security.AutorizacionService;
 import com.kathsoft.visor.app.security.Permisos;
 import com.kathsoft.visor.app.service.rol.RolesService;
 import com.kathsoft.visor.app.service.contribuyente.ContribuyentesService;
+import com.kathsoft.visor.app.service.tercero.TercerosService;
 
 /**
  * Casos de uso de RF-002. Toda operación de escritura es transaccional desde
@@ -76,6 +77,11 @@ public final class UsuariosService {
      */
     public ContribuyentesService contribuyentes() {
         return new ContribuyentesService(jpa);
+    }
+
+    /** @return servicio RF-005 con el mismo contexto transaccional */
+    public TercerosService terceros() {
+        return new TercerosService(jpa);
     }
 
     /**
