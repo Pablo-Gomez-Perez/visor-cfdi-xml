@@ -47,7 +47,8 @@ public final class RolesService {
      * <p>La primera vez que se habilita RF-003, el ADMIN existente recibe los
      * permisos iniciales para conservar las funciones RF-002. Después de
      * asignar privilegios, los cambios del operador nunca se restauran
-     * automáticamente al reiniciar. El permiso de gestionar privilegios se
+     * automáticamente al reiniciar. Los permisos incorporados por nuevos
+     * módulos se conceden a ADMIN solamente cuando son nuevos en el catálogo. El permiso de gestionar privilegios se
      * conserva obligatoriamente para ADMIN como mecanismo de recuperación.</p>
      */
     public void inicializarCatalogo() {
@@ -57,6 +58,14 @@ public final class RolesService {
                     .setParameter("clave", "ADMIN")
                     .setLockMode(LockModeType.PESSIMISTIC_WRITE)
                     .getSingleResult();
+
+            // Guardar claves previamente existentes antes de insertar nuevas.
+            // Esto permite conceder solo los privilegios recién incorporados
+            // a ADMIN, SIN restaurar permisos revocados en módulos anteriores.
+            Set<String> clavesExistentes = em.createQuery(
+                    "select p from PermisoEntity p", PermisoEntity.class)
+                    .getResultStream().map(PermisoEntity::getClave)
+                    .collect(Collectors.toSet());
 
             for (Permisos.DefinicionPermiso item : Permisos.catalogo()) {
                 em.createNativeQuery(
@@ -75,10 +84,12 @@ public final class RolesService {
             if (primeraConfiguracion) {
                 administrador.getPermisos().addAll(disponibles);
             } else {
+                // Nuevas funciones: ADMIN recibe solo las claves que todavía
+                // no existían en la tabla permiso al iniciar esta migración.
                 disponibles.stream()
-                    .filter(p -> Permisos.PERMISO_RECUPERACION.equals(p.getClave()))
-                    .findFirst()
-                    .ifPresent(p -> administrador.getPermisos().add(p));
+                    .filter(p -> !clavesExistentes.contains(p.getClave())
+                            || Permisos.PERMISO_RECUPERACION.equals(p.getClave()))
+                    .forEach(administrador.getPermisos()::add);
             }
             return null;
         });

@@ -53,3 +53,28 @@ Consultar `docs/ARQUITECTURA.md`, `docs/RF-002.md` y el esquema canónico `app/d
 - `USUARIOS.ASIGNAR_ADMIN` se exige por separado al otorgar el rol privilegiado ADMIN.
 - Un rol personalizado es editable pero no puede borrarse si hay usuarios asociados. La clave del rol no cambia tras el alta.
 - Para el cliente Swing, recuperar permisos vigentes en `SwingWorker` al entrar a cada catálogo; la pantalla debe mantener GroupLayout y WindowBuilder.
+
+## RF-004 — Contribuyentes y obligatoriedad de actualizar RBAC
+
+- Cada nueva feat/módulo debe auditar la matriz RF-003: definir claves estables
+  en `Permisos` únicamente para operaciones implementadas, insertar de forma
+  idempotente en `permiso`, verificar `AutorizacionService.exigir` en el
+  servicio y añadir pruebas positivas/negativas contra MySQL real.
+- **Bootstrap incremental de permisos:** dar a ADMIN únicamente los permisos
+  realmente nuevos. No restaurar automáticamente permisos revocados tras
+  reiniciar. Proteger siempre `ROLES.CONFIGURAR_PERMISOS`.
+- Diferenciar `contribuyente` de `tercero`: no crear contribuyentes propios
+  por importar automáticamente un emisor/receptor ajeno.
+- RFC es identidad fiscal de negocio; se valida solo estructura y no se
+  presenta como verificado ante SAT. En RF-004 no se permite cambiar RFC
+  después del alta; nombre, CP y correo sí.
+- Acceso a contribuyentes requiere **permiso de acción** y **asignación
+  explícita en usuario_contribuyente**; el privilegio excepcional
+  `CONTRIBUYENTES.ASIGNAR_USUARIOS` administra alcance global.
+- No eliminar físicamente contribuyentes con historia fiscal; baja lógica.
+- No solapar periodos para una misma clave de régimen y contribuyente.
+  No asumir que la clave de tres dígitos está vigente o existe en SAT
+  sin cargar catálogos fiscales oficiales.
+- UI RF-004 usa `PanelContribuyentes` dentro de CardLayout y un solo
+  `Fr_DatosContribuyente` con pestañas de datos, regímenes y usuarios.
+- Documentación: `docs/RF-004.md` y `docs/UI-SWING-WINDOWBUILDER.md`.

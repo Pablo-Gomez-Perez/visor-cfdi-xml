@@ -19,6 +19,13 @@ public final class Permisos {
     public static final String USUARIOS_RESTABLECER_CLAVE = "USUARIOS.RESTABLECER_CLAVE";
     public static final String USUARIOS_ASIGNAR_ADMIN = "USUARIOS.ASIGNAR_ADMIN";
 
+    public static final String CONTRIBUYENTES_CONSULTAR = "CONTRIBUYENTES.CONSULTAR";
+    public static final String CONTRIBUYENTES_CREAR = "CONTRIBUYENTES.CREAR";
+    public static final String CONTRIBUYENTES_MODIFICAR = "CONTRIBUYENTES.MODIFICAR";
+    public static final String CONTRIBUYENTES_CAMBIAR_ESTADO = "CONTRIBUYENTES.CAMBIAR_ESTADO";
+    public static final String CONTRIBUYENTES_GESTIONAR_REGIMENES = "CONTRIBUYENTES.GESTIONAR_REGIMENES";
+    public static final String CONTRIBUYENTES_ASIGNAR_USUARIOS = "CONTRIBUYENTES.ASIGNAR_USUARIOS";
+
     public static final String ROLES_CONSULTAR = "ROLES.CONSULTAR";
     public static final String ROLES_CREAR = "ROLES.CREAR";
     public static final String ROLES_MODIFICAR = "ROLES.MODIFICAR";
@@ -39,6 +46,12 @@ public final class Permisos {
         new DefinicionPermiso("USUARIOS", "ASIGNAR_ROL", "Asignar roles sin conceder privilegios superiores a los propios"),
         new DefinicionPermiso("USUARIOS", "RESTABLECER_CLAVE", "Restablecer contraseñas de usuarios"),
         new DefinicionPermiso("USUARIOS", "ASIGNAR_ADMIN", "Asignar el rol privilegiado ADMIN (operación crítica)"),
+        new DefinicionPermiso("CONTRIBUYENTES", "CONSULTAR", "Consultar contribuyentes autorizados"),
+        new DefinicionPermiso("CONTRIBUYENTES", "CREAR", "Registrar nuevos contribuyentes"),
+        new DefinicionPermiso("CONTRIBUYENTES", "MODIFICAR", "Editar datos fiscales y contacto"),
+        new DefinicionPermiso("CONTRIBUYENTES", "CAMBIAR_ESTADO", "Activar o desactivar contribuyentes"),
+        new DefinicionPermiso("CONTRIBUYENTES", "GESTIONAR_REGIMENES", "Registrar y modificar vigencias de régimen fiscal"),
+        new DefinicionPermiso("CONTRIBUYENTES", "ASIGNAR_USUARIOS", "Administrar usuarios autorizados por contribuyente"),
         new DefinicionPermiso("ROLES", "CONSULTAR", "Consultar el catálogo de roles"),
         new DefinicionPermiso("ROLES", "CREAR", "Crear roles personalizados"),
         new DefinicionPermiso("ROLES", "MODIFICAR", "Editar la descripción de roles"),

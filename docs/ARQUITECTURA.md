@@ -90,3 +90,23 @@ un permiso adicional `USUARIOS.ASIGNAR_ADMIN`. Esta política no reemplaza
 la necesidad de autorización en servidor para clientes no confiables.
 
 Referencia: [docs/RF-003.md](RF-003.md).
+
+## Administración multi-contribuyente (RF-004)
+
+El titular fiscal administrado se representa en `contribuyente`, con
+historial `contribuyente_regimen` y asignación de operadores
+`usuario_contribuyente`. La separación de los terceros ajenos a la
+empresa se mantiene en `tercero`.
+
+La autorización tiene dos dimensiones: permiso de operación proveniente
+de RF-003 y alcance por contribuyente proveniente de
+`usuario_contribuyente`. La asignación global de usuarios
+`CONTRIBUYENTES.ASIGNAR_USUARIOS` es una facultad elevada.
+
+La inicialización de `Permisos` conserva los privilegios revocados y
+concede solo permisos nuevos a ADMIN, como política obligatoria para las
+siguientes ampliaciones del proyecto. Las modificaciones de un
+contribuyente o de sus accesos usan Hibernate dentro de una transacción
+atómica Java SE, junto con su auditoría; no requieren JDBC masivo.
+
+Más información en [RF-004](RF-004.md).

@@ -22,6 +22,7 @@ import com.kathsoft.visor.app.security.PasswordHasher;
 import com.kathsoft.visor.app.security.AutorizacionService;
 import com.kathsoft.visor.app.security.Permisos;
 import com.kathsoft.visor.app.service.rol.RolesService;
+import com.kathsoft.visor.app.service.contribuyente.ContribuyentesService;
 
 /**
  * Casos de uso de RF-002. Toda operación de escritura es transaccional desde
@@ -65,6 +66,16 @@ public final class UsuariosService {
      */
     public RolesService roles() {
         return new RolesService(jpa);
+    }
+
+    /**
+     * Ofrece el módulo RF-004 sobre la misma fábrica JPA y las mismas
+     * reglas de transacción, sin exponer EntityManager a Swing.
+     *
+     * @return servicio de administración de contribuyentes
+     */
+    public ContribuyentesService contribuyentes() {
+        return new ContribuyentesService(jpa);
     }
 
     /**
