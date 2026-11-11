@@ -25,6 +25,8 @@ import com.kathsoft.visor.app.security.Permisos;
 import com.kathsoft.visor.app.service.rol.RolesService;
 import com.kathsoft.visor.app.service.contribuyente.ContribuyentesService;
 import com.kathsoft.visor.app.view.contribuyente.PanelContribuyentes;
+import com.kathsoft.visor.app.service.tercero.TercerosService;
+import com.kathsoft.visor.app.view.tercero.PanelTerceros;
 import com.kathsoft.visor.app.service.usuario.UsuariosService;
 import com.kathsoft.visor.app.view.rol.PanelRoles;
 import com.kathsoft.visor.app.view.usuario.Fr_Login;
@@ -44,10 +46,12 @@ public class Fr_Principal extends JFrame {
     private static final String CARD_USUARIOS = "panelUsuarios";
     private static final String CARD_ROLES = "panelRoles";
     private static final String CARD_CONTRIBUYENTES = "panelContribuyentes";
+    private static final String CARD_TERCEROS = "panelTerceros";
 
     private UsuariosService usuarios;
     private RolesService roles;
     private ContribuyentesService contribuyentes;
+    private TercerosService terceros;
     private UsuarioSesion sesion;
 
     private JMenuBar barraMenu;
@@ -59,6 +63,7 @@ public class Fr_Principal extends JFrame {
     private JMenuItem opcionUsuarios;
     private JMenuItem opcionRoles;
     private JMenuItem opcionContribuyentes;
+    private JMenuItem opcionTerceros;
     private JMenuItem opcionAdministrarXml;
     private JMenuItem opcionCargarXml;
     private JMenuItem opcionActualizarPermisos;
@@ -73,6 +78,7 @@ public class Fr_Principal extends JFrame {
     private PanelUsuarios panelUsuarios;
     private PanelRoles panelRoles;
     private PanelContribuyentes panelContribuyentes;
+    private PanelTerceros panelTerceros;
     private JButton btnInicio;
     private JButton btnContribuyentes;
     private JButton btnAdministrarXml;
@@ -98,6 +104,7 @@ public class Fr_Principal extends JFrame {
         this.usuarios = usuarios;
         this.roles = usuarios == null ? null : usuarios.roles();
         this.contribuyentes = usuarios == null ? null : usuarios.contribuyentes();
+        this.terceros = usuarios == null ? null : usuarios.terceros();
         this.sesion = sesion;
         if (sesion != null) {
             lblEstadoSesion.setText("Sesión: " + sesion.nombre() + " (" + sesion.login() + ")");
@@ -135,6 +142,11 @@ public class Fr_Principal extends JFrame {
         opcionContribuyentes.setEnabled(false);
         menuAdministracion.add(opcionContribuyentes);
         opcionContribuyentes.addActionListener(e -> actualizarPermisos(CARD_CONTRIBUYENTES));
+
+        opcionTerceros = new JMenuItem("Administrar terceros");
+        opcionTerceros.setEnabled(false);
+        menuAdministracion.add(opcionTerceros);
+        opcionTerceros.addActionListener(e -> actualizarPermisos(CARD_TERCEROS));
 
         menuCfdi = new JMenu("CFDI");
         barraMenu.add(menuCfdi);
@@ -193,6 +205,8 @@ public class Fr_Principal extends JFrame {
         panelPrincipalContenedor.add(panelRoles, CARD_ROLES);
         panelContribuyentes = new PanelContribuyentes();
         panelPrincipalContenedor.add(panelContribuyentes, CARD_CONTRIBUYENTES);
+        panelTerceros = new PanelTerceros();
+        panelPrincipalContenedor.add(panelTerceros, CARD_TERCEROS);
         cardLayout.show(panelPrincipalContenedor, CARD_INICIO);
 
         panelEstado = new JPanel();
@@ -237,7 +251,7 @@ public class Fr_Principal extends JFrame {
      * @param destino tarjeta requerida, o null para solo refrescar menús
      */
     private void actualizarPermisos(String destino) {
-        if (sesion == null || usuarios == null || roles == null || contribuyentes == null) {
+        if (sesion == null || usuarios == null || roles == null || contribuyentes == null || terceros == null) {
             return;
         }
         opcionActualizarPermisos.setEnabled(false);
@@ -257,10 +271,14 @@ public class Fr_Principal extends JFrame {
                     opcionUsuarios.setEnabled(verUsuarios);
                     opcionRoles.setEnabled(verRoles);
                     opcionContribuyentes.setEnabled(verContribuyentes);
+                    boolean verTerceros = permisos.contains(Permisos.TERCEROS_CONSULTAR)
+                            && permisos.contains(Permisos.CONTRIBUYENTES_CONSULTAR);
+                    opcionTerceros.setEnabled(verTerceros);
                     btnContribuyentes.setEnabled(verContribuyentes);
                     panelUsuarios.configurar(usuarios, sesion, permisos);
                     panelRoles.configurar(roles, sesion, permisos);
                     panelContribuyentes.configurar(contribuyentes, sesion, permisos);
+                    panelTerceros.configurar(terceros, contribuyentes, sesion, permisos);
                     if (CARD_USUARIOS.equals(destino)) {
                         if (verUsuarios) {
                             cardLayout.show(panelPrincipalContenedor, CARD_USUARIOS);
@@ -277,6 +295,14 @@ public class Fr_Principal extends JFrame {
                             JOptionPane.showMessageDialog(Fr_Principal.this,
                                     "No tiene permiso para acceder al catálogo de roles.");
                         }
+                    } else if (CARD_TERCEROS.equals(destino)) {
+                        if (verTerceros) {
+                            cardLayout.show(panelPrincipalContenedor, CARD_TERCEROS);
+                            panelTerceros.recargar();
+                        } else {
+                            JOptionPane.showMessageDialog(Fr_Principal.this,
+                                    "No tiene permisos para consultar terceros.");
+                        }
                     } else if (CARD_CONTRIBUYENTES.equals(destino)) {
                         if (verContribuyentes) {
                             cardLayout.show(panelPrincipalContenedor, CARD_CONTRIBUYENTES);
@@ -292,6 +318,7 @@ public class Fr_Principal extends JFrame {
                     opcionUsuarios.setEnabled(false);
                     opcionRoles.setEnabled(false);
                     opcionContribuyentes.setEnabled(false);
+                    opcionTerceros.setEnabled(false);
                     btnContribuyentes.setEnabled(false);
                     JOptionPane.showMessageDialog(Fr_Principal.this,
                             "No se pudieron actualizar los permisos. Revise la conexión MySQL.",
