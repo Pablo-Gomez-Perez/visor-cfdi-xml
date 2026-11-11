@@ -57,11 +57,19 @@ public final class LectorCfdiXml {
         Map<String, Object> receptor = new LinkedHashMap<>();
         Map<String, Object> timbre = new LinkedHashMap<>();
         List<Map<String, Object>> conceptos = new ArrayList<>();
+        List<Map<String, Object>> impuestos = new ArrayList<>();
+        List<Map<String, Object>> relaciones = new ArrayList<>();
+        Map<String, Object> relacionActual = null;
+        Map<String, Object> conceptoActual = null;
+        int profundidad = 0;
+        int profundidadConcepto = -1;
         datos.put("cfdi", cfdi);
         datos.put("emisor", emisor);
         datos.put("receptor", receptor);
         datos.put("timbre", timbre);
         datos.put("conceptos", conceptos);
+        datos.put("impuestos", impuestos);
+        datos.put("relaciones", relaciones);
         boolean root = false;
         boolean complemento = false;
         try (InputStream entrada = Files.newInputStream(archivo)) {
@@ -76,9 +84,18 @@ public final class LectorCfdiXml {
                         if (esCfdi(xml) && "Complemento".equals(xml.getLocalName())) {
                             complemento = false;
                         }
+                        if (profundidad == profundidadConcepto) {
+                            conceptoActual = null;
+                            profundidadConcepto = -1;
+                        }
+                        if (esCfdi(xml) && "CfdiRelacionados".equals(xml.getLocalName())) {
+                            relacionActual = null;
+                        }
+                        profundidad--;
                         continue;
                     }
                     if (event != XMLStreamConstants.START_ELEMENT) continue;
+                    profundidad++;
                     String nombre = xml.getLocalName();
                     if (!root) {
                         if (!esCfdi(xml) || !"Comprobante".equals(nombre)) {
@@ -136,6 +153,24 @@ public final class LectorCfdiXml {
                         put(receptor, "uso", atributo(xml, "UsoCFDI"));
                         put(receptor, "residencia", atributo(xml, "ResidenciaFiscal"));
                         put(receptor, "registroExtranjero", atributo(xml, "NumRegIdTrib"));
+                    } else if (esCfdi(xml) && "InformacionGlobal".equals(nombre)) {
+                        Map<String, Object> global = new LinkedHashMap<>();
+                        put(global, "periodicidad", requerido(xml, "Periodicidad"));
+                        put(global, "meses", requerido(xml, "Meses"));
+                        put(global, "ejercicio", requerido(xml, "Año"));
+                        datos.put("informacionGlobal", global);
+                    } else if (esCfdi(xml) && "CfdiRelacionados".equals(nombre)) {
+                        relacionActual = new LinkedHashMap<>();
+                        put(relacionActual, "tipo", requerido(xml, "TipoRelacion"));
+                        relacionActual.put("uuids", new ArrayList<String>());
+                        relaciones.add(relacionActual);
+                    } else if (esCfdi(xml) && "CfdiRelacionado".equals(nombre)) {
+                        if (relacionActual == null) {
+                            throw new IllegalArgumentException("CFDI relacionado sin grupo");
+                        }
+                        @SuppressWarnings("unchecked")
+                        List<String> uuids = (List<String>) relacionActual.get("uuids");
+                        uuids.add(requerido(xml, "UUID").toUpperCase(Locale.ROOT));
                     } else if (esCfdi(xml) && "Concepto".equals(nombre)) {
                         if (conceptos.size() >= 10000) {
                             throw new IllegalArgumentException("Demasiados conceptos en un XML");
@@ -151,7 +186,36 @@ public final class LectorCfdiXml {
                         put(c, "importe", decimal(requerido(xml, "Importe")));
                         put(c, "descuento", decimal(atributo(xml, "Descuento")));
                         put(c, "objeto", atributo(xml, "ObjetoImp"));
+                        c.put("impuestos", new ArrayList<Map<String, Object>>());
                         conceptos.add(c);
+                        conceptoActual = c;
+                        profundidadConcepto = profundidad;
+                    } else if (esCfdi(xml) && "Impuestos".equals(nombre)
+                            && conceptoActual == null) {
+                        Map<String, Object> totales = new LinkedHashMap<>();
+                        put(totales, "trasladados",
+                                decimal(atributo(xml, "TotalImpuestosTrasladados")));
+                        put(totales, "retenidos",
+                                decimal(atributo(xml, "TotalImpuestosRetenidos")));
+                        datos.put("totalesImpuestos", totales);
+                    } else if (esCfdi(xml) && ("Traslado".equals(nombre)
+                            || "Retencion".equals(nombre))) {
+                        Map<String, Object> impuesto = new LinkedHashMap<>();
+                        put(impuesto, "movimiento",
+                                "Traslado".equals(nombre) ? "TRASLADO" : "RETENCION");
+                        put(impuesto, "impuesto", requerido(xml, "Impuesto"));
+                        put(impuesto, "factor", atributo(xml, "TipoFactor"));
+                        put(impuesto, "base", decimal(atributo(xml, "Base")));
+                        put(impuesto, "tasa", decimal(atributo(xml, "TasaOCuota")));
+                        put(impuesto, "importe", decimal(atributo(xml, "Importe")));
+                        if (conceptoActual != null) {
+                            @SuppressWarnings("unchecked")
+                            List<Map<String, Object>> tax = (List<Map<String, Object>>)
+                                    conceptoActual.get("impuestos");
+                            tax.add(impuesto);
+                        } else {
+                            impuestos.add(impuesto);
+                        }
                     }
                 }
             } finally {
