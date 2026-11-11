@@ -306,11 +306,27 @@ public final class ImportacionCfdiService {
             exigirAcceso(em, usuario, contribuyente);
             int[] resultado = {0};
             em.unwrap(Session.class).doWork(connection -> {
-                try (CallableStatement call = connection.prepareCall(
-                        "{call sp_rf007_importar_cfdi(?,?,?,?,?,?,?,?,?,?)}")) {
-                    call.registerOutParameter(10, Types.TINYINT);
+                CallableStatement cfdi = null;
+                CallableStatement retencion = null;
+                try {
                     for (Preparado p : pendientes) {
                         verificarCancelacion(cancelar);
+                        CallableStatement call;
+                        if ("RETENCION".equals(p.documento().clase())) {
+                            if (retencion == null) {
+                                retencion = connection.prepareCall(
+                                        "{call sp_rf007_importar_retencion(?,?,?,?,?,?,?,?,?,?)}");
+                                retencion.registerOutParameter(10, Types.TINYINT);
+                            }
+                            call = retencion;
+                        } else {
+                            if (cfdi == null) {
+                                cfdi = connection.prepareCall(
+                                        "{call sp_rf007_importar_cfdi(?,?,?,?,?,?,?,?,?,?)}");
+                                cfdi.registerOutParameter(10, Types.TINYINT);
+                            }
+                            call = cfdi;
+                        }
                         call.setLong(1, lote);
                         call.setInt(2, p.ordinal());
                         call.setLong(3, repo);
@@ -320,9 +336,22 @@ public final class ImportacionCfdiService {
                         call.setString(7, p.origen().getFileName().toString());
                         call.setString(8, p.origen().toAbsolutePath().toString());
                         call.setString(9, p.documento().json());
-                        call.execute();
-                        resultado[0] += call.getInt(10);
+                        try {
+                            call.execute();
+                            resultado[0] += call.getInt(10);
+                        } catch (SQLException er) {
+                            throw new SQLException("RF-007: fallo importando "
+                                    + p.origen().getFileName() + " (ordinal "
+                                    + p.ordinal() + ", clase " + p.documento().clase()
+                                    + "): " + er.getMessage(), er.getSQLState(),
+                                    er.getErrorCode(), er);
+                        }
                     }
+                } finally {
+                    // Cada CallableStatement pertenece a este único hilo y
+                    // a la misma conexión/transacción Hibernate.
+                    if (retencion != null) retencion.close();
+                    if (cfdi != null) cfdi.close();
                 }
             });
             return resultado;

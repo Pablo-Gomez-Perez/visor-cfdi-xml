@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
-import javax.xml.XMLConstants;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
@@ -22,8 +21,8 @@ import javax.xml.stream.XMLStreamReader;
 
 /**
  * Extractor StAX de cabecera, participantes, timbre y conceptos CFDI 3.3/4.0.
- * No autentica sellos, no consulta SAT y rechaza tipos/complementos que aun
- * carecen de persistencia especializada: evita aceptar datos incompletos.
+ * Soporta CFDI I/E/T/P/N y la familia Retenciones 2.0 con persistencia
+ * especializada. No autentica sellos, XSD, ni consulta el SAT.
  * Cada instancia es de uso exclusivo de un hilo.
  */
 public final class LectorCfdiXml {
@@ -36,7 +35,8 @@ public final class LectorCfdiXml {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /** Resultado compacto y serializable para transferir al escritor JDBC. */
-    public record Documento(String uuid, String emisorRfc, String receptorRfc, String json) { }
+    public record Documento(String uuid, String emisorRfc, String receptorRfc,
+            String json, String clase, String tipo) { }
 
     /**
      * Lee un XML local sin resolver entidades externas ni cargar el árbol DOM.
@@ -98,8 +98,24 @@ public final class LectorCfdiXml {
                     profundidad++;
                     String nombre = xml.getLocalName();
                     if (!root) {
+                        if (LectorRetenciones20.NAMESPACE.equals(xml.getNamespaceURI())
+                                && "Retenciones".equals(nombre)) {
+                            Map<String, Object> datosRet = LectorRetenciones20.leer(xml);
+                            String uuidRet = (String) datosRet.get("uuid");
+                            if (uuidRet == null || !UUID.matcher(uuidRet).matches()) {
+                                throw new IllegalArgumentException("UUID de retenciones inválido");
+                            }
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> emisorRet = (Map<String, Object>) datosRet.get("emisor");
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> receptorRet = (Map<String, Object>) datosRet.get("receptor");
+                            return new Documento(uuidRet,
+                                    (String) emisorRet.get("rfc"),
+                                    (String) receptorRet.get("rfc"),
+                                    JSON.writeValueAsString(datosRet), "RETENCION", null);
+                        }
                         if (!esCfdi(xml) || !"Comprobante".equals(nombre)) {
-                            throw new IllegalArgumentException("No es un comprobante CFDI");
+                            throw new IllegalArgumentException("No es un comprobante CFDI o retenciones 2.0");
                         }
                         root = true;
                         String version = requerido(xml, "Version");
@@ -128,19 +144,37 @@ public final class LectorCfdiXml {
                     } else if (esCfdi(xml) && "Complemento".equals(nombre)) {
                         complemento = true;
                     } else if (complemento) {
-                        if (!TFD.equals(xml.getNamespaceURI())
-                                || !"TimbreFiscalDigital".equals(nombre)) {
+                        if (TFD.equals(xml.getNamespaceURI())
+                                && "TimbreFiscalDigital".equals(nombre)) {
+                            if (datos.containsKey("uuid")) {
+                                throw new IllegalArgumentException("Timbre duplicado");
+                            }
+                            put(datos, "uuid", requerido(xml, "UUID").toUpperCase(Locale.ROOT));
+                            put(timbre, "version", requerido(xml, "Version"));
+                            put(timbre, "fecha", LocalDateTime.parse(
+                                    requerido(xml, "FechaTimbrado")).format(FECHA));
+                            put(timbre, "rfcPac", atributo(xml, "RfcProvCertif"));
+                            put(timbre, "noCertificadoSat", requerido(xml, "NoCertificadoSAT"));
+                            put(timbre, "selloCfd", atributo(xml, "SelloCFD"));
+                            put(timbre, "selloSat", atributo(xml, "SelloSAT"));
+                        } else if (LectorComplementosCfdi.PAGOS20.equals(xml.getNamespaceURI())
+                                && "Pagos".equals(nombre)) {
+                            if (datos.containsKey("pagos")) {
+                                throw new IllegalArgumentException("Complemento Pagos duplicado");
+                            }
+                            datos.put("pagos", LectorComplementosCfdi.pagos(xml));
+                            profundidad--;
+                        } else if (LectorComplementosCfdi.NOMINA12.equals(xml.getNamespaceURI())
+                                && "Nomina".equals(nombre)) {
+                            if (datos.containsKey("nomina")) {
+                                throw new IllegalArgumentException("Complemento Nómina duplicado");
+                            }
+                            datos.put("nomina", LectorComplementosCfdi.nomina(xml));
+                            profundidad--;
+                        } else {
                             throw new IllegalArgumentException(
                                     "Complemento no soportado por RF-007: " + nombre);
                         }
-                        put(datos, "uuid", requerido(xml, "UUID").toUpperCase(Locale.ROOT));
-                        put(timbre, "version", requerido(xml, "Version"));
-                        put(timbre, "fecha", LocalDateTime.parse(
-                                requerido(xml, "FechaTimbrado")).format(FECHA));
-                        put(timbre, "rfcPac", atributo(xml, "RfcProvCertif"));
-                        put(timbre, "noCertificadoSat", requerido(xml, "NoCertificadoSAT"));
-                        put(timbre, "selloCfd", atributo(xml, "SelloCFD"));
-                        put(timbre, "selloSat", atributo(xml, "SelloSAT"));
                     } else if (esCfdi(xml) && "Emisor".equals(nombre)) {
                         put(emisor, "rfc", requerido(xml, "Rfc").toUpperCase(Locale.ROOT));
                         put(emisor, "nombre", atributo(xml, "Nombre"));
@@ -223,9 +257,13 @@ public final class LectorCfdiXml {
             }
         }
         String tipo = (String) cfdi.get("tipo");
-        if (!root || !List.of("I", "E", "T").contains(tipo)) {
+        if (!root || !List.of("I", "E", "T", "P", "N").contains(tipo)) {
+            throw new IllegalArgumentException("Tipo de comprobante no soportado por RF-007");
+        }
+        if (("P".equals(tipo) != datos.containsKey("pagos"))
+                || ("N".equals(tipo) != datos.containsKey("nomina"))) {
             throw new IllegalArgumentException(
-                    "RF-007 admite inicialmente CFDI I/E/T; otros tipos requieren complementos especializados");
+                    "Tipo P/N incompatible con sus complementos requeridos");
         }
         if (conceptos.isEmpty()) {
             throw new IllegalArgumentException("Comprobante sin conceptos");
@@ -239,7 +277,8 @@ public final class LectorCfdiXml {
         }
         try {
             return new Documento(uuid, (String) emisor.get("rfc"),
-                    (String) receptor.get("rfc"), JSON.writeValueAsString(datos));
+                    (String) receptor.get("rfc"), JSON.writeValueAsString(datos),
+                    "CFDI", tipo);
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("No se pudo serializar el documento fiscal", ex);
         }
