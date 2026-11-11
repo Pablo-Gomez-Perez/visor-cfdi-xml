@@ -115,8 +115,18 @@ public class PanelPeriodosFiscales extends JPanel {
         cmbPeriodo = new JComboBox<>(new String[] {"Ejercicio", "Mes", "Rango"});
         spEjercicio = new JSpinner(new SpinnerNumberModel(LocalDate.now().getYear(), 1, 9998, 1));
         spMes = new JSpinner(new SpinnerNumberModel(LocalDate.now().getMonthValue(), 1, 12, 1));
-        txfDesde = crearCampoFecha(LocalDate.now().withDayOfMonth(1));
-        txfHasta = crearCampoFecha(LocalDate.now());
+        // Declarar cada componente explícitamente permite que WindowBuilder
+        // identifique los controles en su árbol de diseño.
+        txfDesde = new JFormattedTextField(crearMascaraFecha());
+        txfDesde.setColumns(10);
+        txfDesde.setToolTipText("dd-mm-aaaa");
+        txfDesde.setFocusLostBehavior(JFormattedTextField.PERSIST);
+        txfDesde.setText(LocalDate.now().withDayOfMonth(1).format(FORMATO_FECHA));
+        txfHasta = new JFormattedTextField(crearMascaraFecha());
+        txfHasta.setColumns(10);
+        txfHasta.setToolTipText("dd-mm-aaaa");
+        txfHasta.setFocusLostBehavior(JFormattedTextField.PERSIST);
+        txfHasta.setText(LocalDate.now().format(FORMATO_FECHA));
         btnConsultar = new JButton("Consultar");
         btnConsultar.setEnabled(false);
         btnAnterior = new JButton("Anterior");
@@ -187,19 +197,17 @@ public class PanelPeriodosFiscales extends JPanel {
     }
 
     /**
-     * Campo de fecha con máscara obligatoria dd-MM-aaaa, compatible con WindowBuilder.
-     * La máscara controla la entrada y LocalDate valida el calendario real.
+     * Crea solamente el formateador de la fecha; WindowBuilder debe encontrar
+     * el constructor de cada JFormattedTextField en inicializarComponentes().
+     *
+     * @return máscara de entrada dd-MM-aaaa con ocho dígitos obligatorios
      */
-    private static JFormattedTextField crearCampoFecha(LocalDate inicial) {
+    private MaskFormatter crearMascaraFecha() {
         try {
             MaskFormatter mascara = new MaskFormatter("##-##-####");
             mascara.setPlaceholderCharacter('_');
-            mascara.setAllowsInvalid(false);
-            JFormattedTextField campo = new JFormattedTextField(mascara);
-            campo.setColumns(10);
-            campo.setFocusLostBehavior(JFormattedTextField.COMMIT_OR_REVERT);
-            campo.setText(inicial.format(FORMATO_FECHA));
-            return campo;
+            mascara.setValidCharacters("0123456789");
+            return mascara;
         } catch (ParseException ex) {
             throw new IllegalStateException("Máscara de fecha inválida", ex);
         }
