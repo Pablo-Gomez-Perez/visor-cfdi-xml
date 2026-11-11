@@ -33,6 +33,11 @@ class ValidadorContribuyenteTest {
                 () -> ValidadorContribuyente.normalizarRfc("ABC-010101-AAA"));
         assertThrows(IllegalArgumentException.class,
                 () -> ValidadorContribuyente.normalizarRfc("ABC"));
+        // Las claves genéricas de CFDI no identifican contribuyentes propios.
+        assertThrows(IllegalArgumentException.class,
+                () -> ValidadorContribuyente.normalizarRfc("XAXX010101000"));
+        assertThrows(IllegalArgumentException.class,
+                () -> ValidadorContribuyente.normalizarRfc("XEXX010101000"));
     }
 
     @Test

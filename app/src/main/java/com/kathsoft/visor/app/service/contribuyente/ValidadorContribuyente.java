@@ -57,6 +57,12 @@ public final class ValidadorContribuyente {
         if (!rfc.matches("(?:[A-ZÑ&]{3}|[A-ZÑ&]{4})[0-9]{6}[A-Z0-9]{3}")) {
             throw new IllegalArgumentException("RFC inválido: debe tener 12 o 13 caracteres con estructura fiscal");
         }
+        // RFC genéricos para público general/extranjeros sin inscripción:
+        // son claves de receptores CFDI, no identidades de un titular propio.
+        if ("XAXX010101000".equals(rfc) || "XEXX010101000".equals(rfc)) {
+            throw new IllegalArgumentException(
+                    "No puede registrar un RFC genérico como contribuyente propio");
+        }
         return rfc;
     }
 
