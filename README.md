@@ -55,6 +55,13 @@ Java SE 17, Maven, Swing, Eclipse WindowBuilder, GroupLayout, FlatLaf, Hibernate
 
 **Documentación:** [docs/RF-004.md](docs/RF-004.md).
 
+### RF-006 — Consulta de periodos fiscales (en desarrollo)
+- Consultas por ejercicio, mes y rango de fechas, seleccionando emisión, certificación, registro o fecha del nodo Pago.
+- Lectura restringida por permiso `PERIODOS_FISCALES.CONSULTAR` y asignación explícita al contribuyente.
+- Panel `PanelPeriodosFiscales` integrado en el `CardLayout` principal, con `GroupLayout` para WindowBuilder.
+- Sin cierres contables o fiscales, bloqueo de periodos ni determinación de impuestos.
+- Especificación y limitaciones: [docs/RF-006.md](docs/RF-006.md).
+
 ## Preparación
 
 1. Instale JDK 17, Maven 3.9+ y MySQL 8.
