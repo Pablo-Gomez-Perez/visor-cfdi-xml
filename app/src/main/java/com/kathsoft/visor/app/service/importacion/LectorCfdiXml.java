@@ -227,6 +227,9 @@ public final class LectorCfdiXml {
             throw new IllegalArgumentException(
                     "RF-007 admite inicialmente CFDI I/E/T; otros tipos requieren complementos especializados");
         }
+        if (conceptos.isEmpty()) {
+            throw new IllegalArgumentException("Comprobante sin conceptos");
+        }
         String uuid = (String) datos.get("uuid");
         if (uuid == null || !UUID.matcher(uuid).matches()) {
             throw new IllegalArgumentException("Falta UUID válido del timbre fiscal digital");

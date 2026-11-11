@@ -13,7 +13,6 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -249,6 +248,11 @@ public final class ImportacionCfdiService {
 
     private static Preparado preparar(Path archivo, Path staging, String rfc,
             int ordinal) throws Exception {
+        if (archivo.getFileName().toString().length() > 260
+                || archivo.toAbsolutePath().toString().length() > 1024) {
+            throw new IllegalArgumentException("Nombre o ruta origen fuera del límite MySQL: "
+                    + archivo);
+        }
         long tamano = Files.size(archivo);
         if (tamano <= 0 || tamano > MAX_BYTES) {
             throw new IllegalArgumentException("Tamaño XML fuera de rango (1 a 8 MiB): " + archivo);
@@ -295,8 +299,8 @@ public final class ImportacionCfdiService {
             int[] resultado = {0};
             em.unwrap(Session.class).doWork(connection -> {
                 try (CallableStatement call = connection.prepareCall(
-                        "{call sp_rf007_importar_cfdi(?,?,?,?,?,?,?,?)}")) {
-                    call.registerOutParameter(8, Types.TINYINT);
+                        "{call sp_rf007_importar_cfdi(?,?,?,?,?,?,?,?,?,?)}")) {
+                    call.registerOutParameter(10, Types.TINYINT);
                     for (Preparado p : pendientes) {
                         verificarCancelacion(cancelar);
                         archivar(p);
@@ -306,9 +310,11 @@ public final class ImportacionCfdiService {
                         call.setString(4, p.clave());
                         call.setString(5, p.sha());
                         call.setLong(6, p.bytes());
-                        call.setString(7, p.documento().json());
+                        call.setString(7, p.origen().getFileName().toString());
+                        call.setString(8, p.origen().toAbsolutePath().toString());
+                        call.setString(9, p.documento().json());
                         call.execute();
-                        resultado[0] += call.getInt(8);
+                        resultado[0] += call.getInt(10);
                     }
                 }
             });
