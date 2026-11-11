@@ -2,11 +2,14 @@ package com.kathsoft.visor.app.view.periodo;
 
 import java.awt.FlowLayout;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import javax.swing.GroupLayout;
+import javax.swing.JFormattedTextField;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
@@ -18,6 +21,8 @@ import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.text.MaskFormatter;
+import java.text.ParseException;
 
 import com.kathsoft.visor.app.model.dto.FiltroPeriodoFiscal;
 import com.kathsoft.visor.app.model.dto.FiltroPeriodoFiscal.TipoFechaFiscal;
@@ -41,8 +46,11 @@ public class PanelPeriodosFiscales extends JPanel {
     private JComboBox<String> cmbPeriodo;
     private JSpinner spEjercicio;
     private JSpinner spMes;
-    private JSpinner spDesde;
-    private JSpinner spHasta;
+    private JFormattedTextField txfDesde;
+    private JFormattedTextField txfHasta;
+    private static final DateTimeFormatter FORMATO_FECHA =
+            DateTimeFormatter.ofPattern("dd-MM-uuuu")
+                    .withResolverStyle(java.time.format.ResolverStyle.STRICT);
     private JButton btnConsultar;
     private JButton btnAnterior;
     private JButton btnSiguiente;
@@ -100,15 +108,15 @@ public class PanelPeriodosFiscales extends JPanel {
         JLabel lblPeriodo = new JLabel("Periodo");
         JLabel lblEjercicio = new JLabel("Ejercicio");
         JLabel lblMes = new JLabel("Mes");
-        JLabel lblDesde = new JLabel("Desde (AAAAMMDD)");
-        JLabel lblHasta = new JLabel("Hasta (AAAAMMDD)");
+        JLabel lblDesde = new JLabel("Desde (dd-mm-aaaa)");
+        JLabel lblHasta = new JLabel("Hasta (dd-mm-aaaa)");
         cmbContribuyente = new JComboBox<>();
         cmbTipoFecha = new JComboBox<>(TipoFechaFiscal.values());
         cmbPeriodo = new JComboBox<>(new String[] {"Ejercicio", "Mes", "Rango"});
         spEjercicio = new JSpinner(new SpinnerNumberModel(LocalDate.now().getYear(), 1, 9998, 1));
         spMes = new JSpinner(new SpinnerNumberModel(LocalDate.now().getMonthValue(), 1, 12, 1));
-        spDesde = new JSpinner(new SpinnerNumberModel(20260101, 10101, 99981231, 1));
-        spHasta = new JSpinner(new SpinnerNumberModel(20261231, 10101, 99981231, 1));
+        txfDesde = crearCampoFecha(LocalDate.now().withDayOfMonth(1));
+        txfHasta = crearCampoFecha(LocalDate.now());
         btnConsultar = new JButton("Consultar");
         btnConsultar.setEnabled(false);
         btnAnterior = new JButton("Anterior");
@@ -130,8 +138,8 @@ public class PanelPeriodosFiscales extends JPanel {
                 .addComponent(lblEjercicio).addComponent(spEjercicio, 70, 75, 90)
                 .addComponent(lblMes).addComponent(spMes, 45, 50, 65))
             .addGroup(gl.createSequentialGroup().addComponent(lblDesde)
-                .addComponent(spDesde, 90, 100, 115)
-                .addComponent(lblHasta).addComponent(spHasta, 90, 100, 115)
+                .addComponent(txfDesde, 90, 100, 115)
+                .addComponent(lblHasta).addComponent(txfHasta, 90, 100, 115)
                 .addComponent(btnConsultar)));
         gl.setVerticalGroup(gl.createSequentialGroup()
             .addGroup(gl.createParallelGroup(GroupLayout.Alignment.BASELINE)
@@ -142,8 +150,8 @@ public class PanelPeriodosFiscales extends JPanel {
                 .addComponent(lblEjercicio).addComponent(spEjercicio)
                 .addComponent(lblMes).addComponent(spMes))
             .addGroup(gl.createParallelGroup(GroupLayout.Alignment.BASELINE)
-                .addComponent(lblDesde).addComponent(spDesde)
-                .addComponent(lblHasta).addComponent(spHasta).addComponent(btnConsultar)));
+                .addComponent(lblDesde).addComponent(txfDesde)
+                .addComponent(lblHasta).addComponent(txfHasta).addComponent(btnConsultar)));
         modelo = new DefaultTableModel(
                 new String[] {"Documento", "UUID", "Sentido", "Tipo", "Fecha evento",
                         "Pago ID", "Monto pago", "Moneda"}, 0) {
@@ -178,6 +186,43 @@ public class PanelPeriodosFiscales extends JPanel {
         btnSiguiente.addActionListener(e -> { pagina++; consultar(); });
     }
 
+    /**
+     * Campo de fecha con máscara obligatoria dd-MM-aaaa, compatible con WindowBuilder.
+     * La máscara controla la entrada y LocalDate valida el calendario real.
+     */
+    private static JFormattedTextField crearCampoFecha(LocalDate inicial) {
+        try {
+            MaskFormatter mascara = new MaskFormatter("##-##-####");
+            mascara.setPlaceholderCharacter('_');
+            mascara.setAllowsInvalid(false);
+            JFormattedTextField campo = new JFormattedTextField(mascara);
+            campo.setColumns(10);
+            campo.setFocusLostBehavior(JFormattedTextField.COMMIT_OR_REVERT);
+            campo.setText(inicial.format(FORMATO_FECHA));
+            return campo;
+        } catch (ParseException ex) {
+            throw new IllegalStateException("Máscara de fecha inválida", ex);
+        }
+    }
+
+    /**
+     * Verifica una fecha completa y existente, incluidos años bisiestos.
+     * No se interpreta el orden de campos conforme a la configuración regional.
+     */
+    private static LocalDate leerFecha(JFormattedTextField campo, String etiqueta) {
+        String valor = campo.getText();
+        if (valor == null || !valor.matches("\\d{2}-\\d{2}-\\d{4}")) {
+            throw new IllegalArgumentException("La fecha " + etiqueta
+                    + " debe tener el formato dd-mm-aaaa");
+        }
+        try {
+            return LocalDate.parse(valor, FORMATO_FECHA);
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException("La fecha " + etiqueta
+                    + " no es una fecha válida: " + valor, ex);
+        }
+    }
+
     private FiltroPeriodoFiscal filtro() {
         TipoFechaFiscal tipo = (TipoFechaFiscal) cmbTipoFecha.getSelectedItem();
         int ejercicio = (Integer) spEjercicio.getValue();
@@ -185,10 +230,7 @@ public class PanelPeriodosFiscales extends JPanel {
             case 0 -> FiltroPeriodoFiscal.ejercicio(ejercicio, tipo);
             case 1 -> FiltroPeriodoFiscal.mes(ejercicio, (Integer) spMes.getValue(), tipo);
             default -> new FiltroPeriodoFiscal(
-                LocalDate.parse(String.format("%08d", (Integer) spDesde.getValue()),
-                    java.time.format.DateTimeFormatter.BASIC_ISO_DATE),
-                LocalDate.parse(String.format("%08d", (Integer) spHasta.getValue()),
-                    java.time.format.DateTimeFormatter.BASIC_ISO_DATE), tipo);
+                leerFecha(txfDesde, "Desde"), leerFecha(txfHasta, "Hasta"), tipo);
         };
     }
 
@@ -212,7 +254,8 @@ public class PanelPeriodosFiscales extends JPanel {
                     modelo.setRowCount(0);
                     for (MovimientoPeriodoFiscal m : filas) {
                         modelo.addRow(new Object[] {m.documentoId(), m.uuid(), m.sentido(),
-                            m.tipoCfdi(), m.fechaEvento(), m.pagoId(), m.montoPago(),
+                            m.tipoCfdi(), m.fechaEvento() == null ? "" :
+                            m.fechaEvento().format(FORMATO_FECHA), m.pagoId(), m.montoPago(),
                             m.monedaPago()});
                     }
                     btnAnterior.setEnabled(paginaSolicitada > 0);
