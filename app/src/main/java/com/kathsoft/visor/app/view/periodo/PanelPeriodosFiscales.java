@@ -284,7 +284,11 @@ public class PanelPeriodosFiscales extends JPanel {
 
     private void error(Throwable ex) {
         lblEstado.setText("No se pudo completar la consulta");
-        JOptionPane.showMessageDialog(this, ex.getMessage(),
+        Throwable causa = ex == null
+                ? new IllegalStateException("Error desconocido durante la consulta")
+                : ex;
+        causa.printStackTrace(System.err);
+        JOptionPane.showMessageDialog(this, causa.getMessage(),
                 "Consulta de periodos", JOptionPane.ERROR_MESSAGE);
     }
 }

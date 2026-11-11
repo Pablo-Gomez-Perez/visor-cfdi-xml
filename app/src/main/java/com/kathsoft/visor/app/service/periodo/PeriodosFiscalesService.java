@@ -64,7 +64,8 @@ public final class PeriodosFiscalesService {
             throw new IllegalArgumentException("Filtro o página inválidos");
         }
         if (contribuyenteId <= 0) throw new IllegalArgumentException("Contribuyente inválido");
-        return jpa.consultar(em -> {
+        try {
+            return jpa.consultar(em -> {
             AutorizacionService.exigir(em, operadorId, Permisos.PERIODOS_FISCALES_CONSULTAR);
             exigirAlcance(em, operadorId, contribuyenteId);
             boolean pago = filtro.tipo() == FiltroPeriodoFiscal.TipoFechaFiscal.PAGO;
@@ -90,12 +91,58 @@ public final class PeriodosFiscalesService {
                 .setFirstResult(pagina * MAX_PAGINA).setMaxResults(MAX_PAGINA);
             @SuppressWarnings("unchecked")
             List<Object[]> filas = consulta.getResultList();
-            return filas.stream().map(f -> new MovimientoPeriodoFiscal(
-                ((Number) f[0]).longValue(), (String) f[1], (String) f[2],
-                (String) f[3], fecha(f[4]),
-                f[5] == null ? null : ((Number) f[5]).longValue(),
-                f[6] == null ? null : (BigDecimal) f[6], (String) f[7])).toList();
-        });
+            return filas.stream().map(PeriodosFiscalesService::mapearFila).toList();
+            });
+        } catch (RuntimeException er) {
+            System.err.println("RF-006: falló la consulta de periodos del contribuyente "
+                    + contribuyenteId + ", criterio " + filtro.tipo() + ", página " + pagina);
+            er.printStackTrace(System.err);
+            throw er;
+        }
+    }
+
+    /**
+     * Convierte una fila de consulta nativa a su DTO, conservando los tipos
+     * monetarios y temporales sin transformaciones imprecisas.
+     *
+     * <p>Hibernate puede materializar un CHAR(1) como Character o String
+     * según el dialecto y el driver JDBC. No debe realizarse un cast
+     * directo a String para la columna cfdi.tipo.</p>
+     *
+     * @param f fila SQL con ocho posiciones del SELECT de periodos
+     * @return movimiento tipado
+     */
+    static MovimientoPeriodoFiscal mapearFila(Object[] f) {
+        if (f == null || f.length != 8) {
+            throw new IllegalArgumentException("La fila SQL no contiene ocho columnas");
+        }
+        try {
+            return new MovimientoPeriodoFiscal(
+                    ((Number) f[0]).longValue(),
+                    textoSql(f[1], "documento_fiscal.uuid"),
+                    textoSql(f[2], "contribuyente_documento.sentido"),
+                    textoSql(f[3], "cfdi.tipo"),
+                    fecha(f[4]),
+                    f[5] == null ? null : ((Number) f[5]).longValue(),
+                    f[6] == null ? null : (BigDecimal) f[6],
+                    textoSql(f[7], "pago_fiscal.moneda"));
+        } catch (RuntimeException er) {
+            throw new IllegalStateException(
+                    "No fue posible convertir la fila de consulta para documento "
+                    + (f[0] == null ? "desconocido" : f[0]), er);
+        }
+    }
+
+    /**
+     * Normaliza las representaciones JDBC de caracteres y textos.
+     * Se rechazan tipos no esperados para no ocultar anomalías de mapeo.
+     */
+    private static String textoSql(Object valor, String columna) {
+        if (valor == null) return null;
+        if (valor instanceof String texto) return texto;
+        if (valor instanceof Character caracter) return caracter.toString();
+        throw new IllegalArgumentException("Tipo JDBC inesperado para " + columna
+                + ": " + valor.getClass().getName());
     }
 
     private static LocalDateTime fecha(Object valor) {
