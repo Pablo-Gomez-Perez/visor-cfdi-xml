@@ -89,7 +89,8 @@ public class Fr_DatosTercero extends JDialog {
         setBounds(100, 100, 700, 430);
         setMinimumSize(new Dimension(610, 390));
         setLocationRelativeTo(getOwner());
-        JPanel contenido = new JPanel(new EmptyBorder(10, 12, 10, 12));
+        JPanel contenido = new JPanel();
+        contenido.setBorder(new EmptyBorder(10, 12, 10, 12));
         setContentPane(contenido);
         JLabel lblRfc = new JLabel("RFC");
         JLabel lblNombre = new JLabel("Nombre / razón social");
