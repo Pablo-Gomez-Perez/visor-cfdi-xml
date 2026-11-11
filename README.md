@@ -44,6 +44,17 @@ Java SE 17, Maven, Swing, Eclipse WindowBuilder, GroupLayout, FlatLaf, Hibernate
 
 **Guía y criterios de aceptación:** [docs/RF-003.md](docs/RF-003.md).
 
+### RF-004 — Administración de contribuyentes
+- Alta y consulta de contribuyentes propios con RFC y razón social obligatorios; CP y correo opcionales.
+- Modificación de nombre/CP/correo, baja lógica y reactivación, sin alterar UUID de documentos.
+- Historial independiente de regímenes fiscales (clave y fechas de vigencia).
+- Control de acceso por contribuyente mediante `usuario_contribuyente`, con matriz de usuarios autorizados.
+- Seis acciones nuevas incorporadas a la matriz editable de Roles y permisos.
+- `PanelContribuyentes` en el CardLayout central, acceso de menú y botón rápido.
+- Un solo `Fr_DatosContribuyente` con pestañas de datos fiscales, regímenes y usuarios vinculados.
+
+**Documentación:** [docs/RF-004.md](docs/RF-004.md).
+
 ## Preparación
 
 1. Instale JDK 17, Maven 3.9+ y MySQL 8.
@@ -60,7 +71,7 @@ Java SE 17, Maven, Swing, Eclipse WindowBuilder, GroupLayout, FlatLaf, Hibernate
 6. En la primera configuración, introduzca la contraseña MySQL y pulse **Guardar configuración**. La aplicación verifica la conexión y la guarda cifrada. En los siguientes arranques se conecta automáticamente; Hibernate valida el esquema pero no lo modifica.
 7. Registre el **primer administrador**. No existe cuenta administrativa predeterminada.
 8. Inicie sesión usando el usuario y la contraseña de aplicación recién creados.
-9. En la ventana principal, elija **Administración → Administrar usuarios** o **Administración → Roles y permisos**. Ambos catálogos aparecen en el área central mediante CardLayout, sin abrir otro JFrame.
+9. En la ventana principal, elija **Administración → Administrar usuarios** o **Administración → Roles y permisos** o **Administración → Administrar contribuyentes**. Los catálogos aparecen en el área central mediante CardLayout, sin abrir otro JFrame.
 10. En **Roles y permisos**, cree un rol, selecciónelo y pulse **Configurar privilegios** para marcar o desmarcar cada permiso. Después, asigne el rol desde Administración de usuarios.
 
 **Migración de instalaciones existentes:** si ya existe `config.properties` de RF-001, pero no se habían guardado credenciales cifradas, la aplicación solicitará la contraseña MySQL **una sola vez** mediante «Guardar y conectar». Solo se guarda después de conectar correctamente; en las siguientes ejecuciones pasa al inicio de sesión de la aplicación sin solicitar la clave de MySQL.

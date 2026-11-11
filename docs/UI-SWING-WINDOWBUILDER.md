@@ -141,3 +141,21 @@ descripción. Los checkboxes obligatorios de ADMIN no son editables.
 Las operaciones se cargan y guardan en `SwingWorker`, y los servicios
 verifican privilegios en MySQL antes de ejecutar cambios. Los catálogos
 de usuarios y roles muestran controles según los permisos actualizados.
+
+## RF-004 — Contribuyentes
+
+La ventana principal incluye en **Administración** el `JMenuItem`
+`Administrar contribuyentes` y un acceso rápido habilitado por RBAC.
+
+`PanelContribuyentes extends JPanel` reproduce el catálogo Kath ERP:
+botones superiores, `JTable` dentro de `JScrollPane`, filtro inferior
+de texto/estado y `GroupLayout` explícito. No es un `JFrame`.
+
+`Fr_DatosContribuyente extends JDialog` es la única ventana de detalle;
+sus pestañas incluyen `PanelRegimenesContribuyente` y
+`PanelAccesosContribuyente` como clases Swing independientes.
+La matriz de accesos utiliza `JTable` con `Boolean.class` para mostrar
+casillas, sin utilizar componentes opacos al diseñador.
+
+La construcción en WindowBuilder no debe realizar persistencia y debe
+adaptarse al área útil de un solo monitor de aproximadamente 900×700.
