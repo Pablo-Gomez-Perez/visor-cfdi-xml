@@ -90,6 +90,12 @@ public class PanelContribuyentes extends JPanel {
         this.servicio = servicio;
         this.sesion = sesion;
         this.privilegios = privilegios == null ? Set.of() : Set.copyOf(privilegios);
+        if (!this.privilegios.contains(Permisos.CONTRIBUYENTES_CONSULTAR)) {
+            // Al revocar consulta se retiran los datos que permanecían en
+            // memoria del JTable, sin esperar a otra navegación.
+            modeloContribuyentes.setRowCount(0);
+            lblResultado.setText("Sin permiso de consulta; puede crear si tiene autorización.");
+        }
         establecerOcupado(false);
     }
 

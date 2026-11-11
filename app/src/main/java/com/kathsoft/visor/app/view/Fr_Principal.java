@@ -252,7 +252,8 @@ public class Fr_Principal extends JFrame {
                     Set<String> permisos = get();
                     boolean verUsuarios = permisos.contains(Permisos.USUARIOS_CONSULTAR);
                     boolean verRoles = permisos.stream().anyMatch(p -> p.startsWith("ROLES."));
-                    boolean verContribuyentes = permisos.contains(Permisos.CONTRIBUYENTES_CONSULTAR);
+                    boolean verContribuyentes = permisos.stream()
+                            .anyMatch(p -> p.startsWith("CONTRIBUYENTES."));
                     opcionUsuarios.setEnabled(verUsuarios);
                     opcionRoles.setEnabled(verRoles);
                     opcionContribuyentes.setEnabled(verContribuyentes);
