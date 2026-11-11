@@ -22,6 +22,7 @@ import com.kathsoft.visor.app.security.PasswordHasher;
 import com.kathsoft.visor.app.security.AutorizacionService;
 import com.kathsoft.visor.app.security.Permisos;
 import com.kathsoft.visor.app.service.rol.RolesService;
+import com.kathsoft.visor.app.service.periodo.PeriodosFiscalesService;
 import com.kathsoft.visor.app.service.contribuyente.ContribuyentesService;
 
 /**
@@ -74,6 +75,10 @@ public final class UsuariosService {
      *
      * @return servicio de administración de contribuyentes
      */
+    public PeriodosFiscalesService periodosFiscales() {
+        return new PeriodosFiscalesService(jpa);
+    }
+
     public ContribuyentesService contribuyentes() {
         return new ContribuyentesService(jpa);
     }
