@@ -26,6 +26,11 @@ public final class Permisos {
     public static final String CONTRIBUYENTES_GESTIONAR_REGIMENES = "CONTRIBUYENTES.GESTIONAR_REGIMENES";
     public static final String CONTRIBUYENTES_ASIGNAR_USUARIOS = "CONTRIBUYENTES.ASIGNAR_USUARIOS";
 
+    public static final String TERCEROS_CONSULTAR = "TERCEROS.CONSULTAR";
+    public static final String TERCEROS_CREAR = "TERCEROS.CREAR";
+    public static final String TERCEROS_MODIFICAR = "TERCEROS.MODIFICAR";
+    public static final String TERCEROS_ASIGNAR_ROLES = "TERCEROS.ASIGNAR_ROLES";
+
     public static final String PERIODOS_FISCALES_CONSULTAR = "PERIODOS_FISCALES.CONSULTAR";
 
     public static final String ROLES_CONSULTAR = "ROLES.CONSULTAR";
@@ -54,6 +59,10 @@ public final class Permisos {
         new DefinicionPermiso("CONTRIBUYENTES", "CAMBIAR_ESTADO", "Activar o desactivar contribuyentes"),
         new DefinicionPermiso("CONTRIBUYENTES", "GESTIONAR_REGIMENES", "Registrar y modificar vigencias de régimen fiscal"),
         new DefinicionPermiso("CONTRIBUYENTES", "ASIGNAR_USUARIOS", "Administrar usuarios autorizados por contribuyente"),
+        new DefinicionPermiso("TERCEROS", "CONSULTAR", "Consultar contrapartes autorizadas"),
+        new DefinicionPermiso("TERCEROS", "CREAR", "Registrar contrapartes fiscales"),
+        new DefinicionPermiso("TERCEROS", "MODIFICAR", "Actualizar datos de contrapartes"),
+        new DefinicionPermiso("TERCEROS", "ASIGNAR_ROLES", "Asignar funciones de contraparte por contribuyente"),
         new DefinicionPermiso("PERIODOS_FISCALES", "CONSULTAR", "Consultar documentos por ejercicio, mes y fecha"),
         new DefinicionPermiso("ROLES", "CONSULTAR", "Consultar el catálogo de roles"),
         new DefinicionPermiso("ROLES", "CREAR", "Crear roles personalizados"),

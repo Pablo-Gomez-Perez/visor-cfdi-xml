@@ -11,6 +11,8 @@
         <class>com.kathsoft.visor.app.model.entity.ContribuyenteEntity</class>
         <class>com.kathsoft.visor.app.model.entity.ContribuyenteRegimenEntity</class>
         <class>com.kathsoft.visor.app.model.entity.BitacoraEventoEntity</class>
+        <class>com.kathsoft.visor.app.model.entity.TerceroEntity</class>
+        <class>com.kathsoft.visor.app.model.entity.ContribuyenteTerceroRolEntity</class>
         <exclude-unlisted-classes>true</exclude-unlisted-classes>
         <properties>
             <property name="hibernate.hbm2ddl.auto" value="validate"/>
