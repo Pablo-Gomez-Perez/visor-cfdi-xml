@@ -29,6 +29,8 @@ import com.kathsoft.visor.app.service.tercero.TercerosService;
 import com.kathsoft.visor.app.view.tercero.PanelTerceros;
 import com.kathsoft.visor.app.service.periodo.PeriodosFiscalesService;
 import com.kathsoft.visor.app.view.periodo.PanelPeriodosFiscales;
+import com.kathsoft.visor.app.service.importacion.ImportacionCfdiService;
+import com.kathsoft.visor.app.view.importacion.PanelImportacionCfdi;
 import com.kathsoft.visor.app.service.usuario.UsuariosService;
 import com.kathsoft.visor.app.view.rol.PanelRoles;
 import com.kathsoft.visor.app.view.usuario.Fr_Login;
@@ -50,12 +52,14 @@ public class Fr_Principal extends JFrame {
     private static final String CARD_CONTRIBUYENTES = "panelContribuyentes";
     private static final String CARD_TERCEROS = "panelTerceros";
     private static final String CARD_PERIODOS = "panelPeriodos";
+    private static final String CARD_IMPORTACION = "panelImportacion";
 
     private UsuariosService usuarios;
     private RolesService roles;
     private ContribuyentesService contribuyentes;
     private TercerosService terceros;
     private PeriodosFiscalesService periodos;
+    private ImportacionCfdiService importaciones;
     private UsuarioSesion sesion;
 
     private JMenuBar barraMenu;
@@ -85,6 +89,7 @@ public class Fr_Principal extends JFrame {
     private PanelContribuyentes panelContribuyentes;
     private PanelTerceros panelTerceros;
     private PanelPeriodosFiscales panelPeriodos;
+    private PanelImportacionCfdi panelImportacion;
     private JButton btnInicio;
     private JButton btnContribuyentes;
     private JButton btnAdministrarXml;
@@ -112,6 +117,7 @@ public class Fr_Principal extends JFrame {
         this.contribuyentes = usuarios == null ? null : usuarios.contribuyentes();
         this.terceros = usuarios == null ? null : usuarios.terceros();
         this.periodos = usuarios == null ? null : usuarios.periodosFiscales();
+        this.importaciones = usuarios == null ? null : usuarios.importaciones();
         this.sesion = sesion;
         if (sesion != null) {
             lblEstadoSesion.setText("Sesión: " + sesion.nombre() + " (" + sesion.login() + ")");
@@ -167,7 +173,7 @@ public class Fr_Principal extends JFrame {
         menuCfdi.add(opcionAdministrarXml);
         opcionCargarXml = new JMenuItem("Cargar XML");
         opcionCargarXml.setEnabled(false);
-        opcionCargarXml.setToolTipText("Disponible cuando se implemente la importación XML");
+        opcionCargarXml.addActionListener(e -> actualizarPermisos(CARD_IMPORTACION));
         menuCfdi.add(opcionCargarXml);
 
         menuSesion = new JMenu("Sesión");
@@ -201,7 +207,7 @@ public class Fr_Principal extends JFrame {
         panelSuperiorBotones.add(btnAdministrarXml);
         btnCargarXml = new JButton("Cargar XML");
         btnCargarXml.setEnabled(false);
-        btnCargarXml.setToolTipText("Módulo de importación de CFDI pendiente");
+        btnCargarXml.addActionListener(e -> actualizarPermisos(CARD_IMPORTACION));
         panelSuperiorBotones.add(btnCargarXml);
 
         panelPrincipalContenedor = new JPanel();
@@ -220,6 +226,8 @@ public class Fr_Principal extends JFrame {
         panelPrincipalContenedor.add(panelTerceros, CARD_TERCEROS);
         panelPeriodos = new PanelPeriodosFiscales();
         panelPrincipalContenedor.add(panelPeriodos, CARD_PERIODOS);
+        panelImportacion = new PanelImportacionCfdi();
+        panelPrincipalContenedor.add(panelImportacion, CARD_IMPORTACION);
         cardLayout.show(panelPrincipalContenedor, CARD_INICIO);
 
         panelEstado = new JPanel();
@@ -264,7 +272,7 @@ public class Fr_Principal extends JFrame {
      * @param destino tarjeta requerida, o null para solo refrescar menús
      */
     private void actualizarPermisos(String destino) {
-        if (sesion == null || usuarios == null || roles == null || contribuyentes == null || terceros == null || periodos == null) {
+        if (sesion == null || usuarios == null || roles == null || contribuyentes == null || terceros == null || periodos == null || importaciones == null) {
             return;
         }
         opcionActualizarPermisos.setEnabled(false);
@@ -290,12 +298,24 @@ public class Fr_Principal extends JFrame {
                     boolean verPeriodos = permisos.contains(Permisos.PERIODOS_FISCALES_CONSULTAR);
                     opcionPeriodos.setEnabled(verPeriodos);
                     panelPeriodos.configurar(periodos, sesion, permisos);
+                    boolean importar = permisos.contains(Permisos.CFDI_IMPORTAR);
+                    opcionCargarXml.setEnabled(importar);
+                    btnCargarXml.setEnabled(importar);
+                    panelImportacion.configurar(importaciones, sesion, permisos);
                     btnContribuyentes.setEnabled(verContribuyentes);
                     panelUsuarios.configurar(usuarios, sesion, permisos);
                     panelRoles.configurar(roles, sesion, permisos);
                     panelContribuyentes.configurar(contribuyentes, sesion, permisos);
                     panelTerceros.configurar(terceros, contribuyentes, sesion, permisos);
-                    if (CARD_PERIODOS.equals(destino)) {
+                    if (CARD_IMPORTACION.equals(destino)) {
+                        if (importar) {
+                            cardLayout.show(panelPrincipalContenedor, CARD_IMPORTACION);
+                            panelImportacion.recargar();
+                        } else {
+                            JOptionPane.showMessageDialog(Fr_Principal.this,
+                                    "No tiene permiso para importar CFDI.");
+                        }
+                    } else if (CARD_PERIODOS.equals(destino)) {
                         if (verPeriodos) {
                             cardLayout.show(panelPrincipalContenedor, CARD_PERIODOS);
                             panelPeriodos.recargar();
@@ -344,6 +364,9 @@ public class Fr_Principal extends JFrame {
                     opcionContribuyentes.setEnabled(false);
                     opcionTerceros.setEnabled(false);
                     opcionPeriodos.setEnabled(false);
+                    opcionCargarXml.setEnabled(false);
+                    btnCargarXml.setEnabled(false);
+                    panelImportacion.configurar(null, null, Set.of());
                     panelPeriodos.configurar(null, null, Set.of());
                     btnContribuyentes.setEnabled(false);
                     JOptionPane.showMessageDialog(Fr_Principal.this,

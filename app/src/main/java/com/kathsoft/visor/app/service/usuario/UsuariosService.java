@@ -24,6 +24,9 @@ import com.kathsoft.visor.app.security.Permisos;
 import com.kathsoft.visor.app.service.rol.RolesService;
 import com.kathsoft.visor.app.service.contribuyente.ContribuyentesService;
 import com.kathsoft.visor.app.service.tercero.TercerosService;
+import com.kathsoft.visor.app.service.importacion.ImportacionCfdiService;
+import com.kathsoft.visor.app.service.configuracion.ConfiguracionLocalService;
+import java.io.IOException;
 import com.kathsoft.visor.app.service.periodo.PeriodosFiscalesService;
 
 /**
@@ -88,6 +91,22 @@ public final class UsuariosService {
     /** @return servicio RF-006 de consultas por periodos y fechas fiscales */
     public PeriodosFiscalesService periodosFiscales() {
         return new PeriodosFiscalesService(jpa);
+    }
+
+    /**
+     * Servicio RF-007 con el repositorio XML configurado localmente.
+     * No lee la configuración durante el diseño Swing.
+     * @return importador de CFDI seguro y transaccional
+     */
+    public ImportacionCfdiService importaciones() {
+        try {
+            return new ImportacionCfdiService(jpa,
+                    new ConfiguracionLocalService().cargar()
+                    .orElseThrow(() -> new IllegalStateException("Configure el repositorio XML"))
+                    .directorioXml());
+        } catch (IOException ex) {
+            throw new IllegalStateException("No se pudo leer el repositorio XML configurado", ex);
+        }
     }
 
     /**
