@@ -40,6 +40,49 @@ class ValidadorXsdSatRealIT {
         verificar(validador, "retenciones.xml", ret, "RETENCION");
     }
 
+    /**
+     * Comprobante sintético válido estructuralmente según CFDI 4.0 y TFD 1.1.
+     * Las firmas no son auténticas y NO se afirma su validez fiscal.
+     */
+    @Test
+    void compruebaCasoPositivoContraXsdSatCompleto() throws Exception {
+        String xml = """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4"
+                    xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital"
+                    Version="4.0" Serie="T" Folio="1"
+                    Fecha="2026-11-11T10:15:00"
+                    Sello="AA==" Certificado="AA==" NoCertificado="00001000000512345678"
+                    SubTotal="100.00" Moneda="MXN" Total="100.00"
+                    TipoDeComprobante="I" Exportacion="01" LugarExpedicion="29000">
+                  <cfdi:Emisor Rfc="AAA010101AAA" Nombre="EMISOR DE PRUEBA"
+                      RegimenFiscal="601"/>
+                  <cfdi:Receptor Rfc="BBB010101BBB" Nombre="RECEPTOR DE PRUEBA"
+                      DomicilioFiscalReceptor="29000" RegimenFiscalReceptor="601"
+                      UsoCFDI="G03"/>
+                  <cfdi:Conceptos>
+                    <cfdi:Concepto ClaveProdServ="01010101" Cantidad="1"
+                        ClaveUnidad="H87" Descripcion="SERVICIO" ValorUnitario="100.00"
+                        Importe="100.00" ObjetoImp="01"/>
+                  </cfdi:Conceptos>
+                  <cfdi:Complemento>
+                    <tfd:TimbreFiscalDigital Version="1.1"
+                        UUID="123e4567-e89b-12d3-a456-426614174000"
+                        FechaTimbrado="2026-11-11T10:16:00"
+                        RfcProvCertif="AAA010101AAA" SelloCFD="AA=="
+                        NoCertificadoSAT="00001000000512345678" SelloSAT="AA=="/>
+                  </cfdi:Complemento>
+                </cfdi:Comprobante>
+                """;
+        Path ruta = temporal.resolve("cfdi4-xsd-positivo.xml");
+        Files.writeString(ruta, xml);
+        ValidadorXsdSat.Resultado resultado = new ValidadorXsdSat(
+                Path.of(System.getenv("VISOR_SAT_XSD_DIR"))).validar(ruta);
+        assertEquals(ValidadorXsdSat.Estado.VALIDO,
+                resultado.estado(), resultado.detalle());
+        assertTrue(resultado.valido());
+    }
+
     private void verificar(ValidadorXsdSat validador, String archivo,
             String contenido, String familia) throws Exception {
         Path ruta = temporal.resolve(archivo);
