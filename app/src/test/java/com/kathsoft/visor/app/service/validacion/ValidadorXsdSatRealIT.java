@@ -57,7 +57,7 @@ class ValidadorXsdSatRealIT {
                     TipoDeComprobante="I" Exportacion="01" LugarExpedicion="29000">
                   <cfdi:Emisor Rfc="AAA010101AAA" Nombre="EMISOR DE PRUEBA"
                       RegimenFiscal="601"/>
-                  <cfdi:Receptor Rfc="BBB010101BBB" Nombre="RECEPTOR DE PRUEBA"
+                  <cfdi:Receptor Rfc="BBB010101BBA" Nombre="RECEPTOR DE PRUEBA"
                       DomicilioFiscalReceptor="29000" RegimenFiscalReceptor="601"
                       UsoCFDI="G03"/>
                   <cfdi:Conceptos>
