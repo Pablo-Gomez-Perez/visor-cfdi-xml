@@ -23,5 +23,9 @@ jobs:
           java-version: "17"
           cache: maven
           cache-dependency-path: app/pom.xml
+      - name: Instalar XSD SAT desde una revision fija del espejo
+        run: bash scripts/instalar-esquemas-sat.sh "${{ runner.temp }}/sat-xsd"
       - name: Maven verify
+        env:
+          VISOR_SAT_XSD_DIR: ${{ runner.temp }}/sat-xsd
         run: mvn --batch-mode --no-transfer-progress -f app/pom.xml verify
