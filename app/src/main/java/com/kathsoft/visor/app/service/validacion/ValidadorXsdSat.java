@@ -123,8 +123,6 @@ public final class ValidadorXsdSat {
         String version = inspeccion.version();
         String tipo = inspeccion.tipo();
         String principal = "RETENCION".equals(identidad) ? "RET2.0" : version;
-        String esperadoNs = "RETENCION".equals(identidad) ? RET20
-                : "4.0".equals(version) ? CFDI40 : CFDI33;
         if (!ESQUEMAS.containsKey(principal)
                 || ("CFDI".equals(identidad) && !List.of("I", "E", "T", "P", "N").contains(tipo))) {
             return resultado(ruta, Estado.INCOMPATIBLE, identidad, version, tipo,
@@ -153,6 +151,14 @@ public final class ValidadorXsdSat {
                     ex.getMessage(), 0, 0);
         } catch (RuntimeException ex) {
             ex.printStackTrace(System.err);
+            Throwable causa = ex;
+            while (causa != null) {
+                if (causa instanceof EsquemaNoDisponible) {
+                    return resultado(ruta, Estado.SIN_ESQUEMA, identidad, version,
+                            tipo, causa.getMessage(), 0, 0);
+                }
+                causa = causa.getCause();
+            }
             return resultado(ruta, Estado.ERROR, identidad, version, tipo,
                     "No se pudo compilar el esquema SAT: " + ex.getMessage(), 0, 0);
         }
@@ -239,18 +245,16 @@ public final class ValidadorXsdSat {
                         } else if ("Retenciones".equals(nombre) && RET20.equals(ns)) {
                             familia = "RETENCION";
                             version = xml.getAttributeValue(null, "Version");
-                            if (!"2.0".equals(version)) {
-                                return new Inspeccion(familia, version, tipo, Set.of());
-                            }
+
                         } else {
-                            return new Inspeccion("DESCONOCIDO", null, null, Set.of());
+                            familia = "DESCONOCIDO";
                         }
                     } else if (("Complemento".equals(nombre) && CFDI40.equals(ns))
                             || ("Complemento".equals(nombre) && CFDI33.equals(ns))
                             || ("Complemento".equals(nombre) && RET20.equals(ns))) {
                         nivelComplemento = nivel;
                     } else if (nivel == nivelComplemento + 1 && nivelComplemento > 0) {
-                        String c = switch (ns) {
+                        String c = switch (ns == null ? "" : ns) {
                             case TFD -> "TimbreFiscalDigital".equals(nombre)
                                     && "1.1".equals(xml.getAttributeValue(null, "Version"))
                                         ? "TFD1.1" : "TFD_NO_SOPORTADO";
