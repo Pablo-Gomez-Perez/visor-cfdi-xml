@@ -6,12 +6,12 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.SAXParserFactory;
 import javax.xml.stream.XMLInputFactory;
@@ -36,8 +36,8 @@ import org.xml.sax.SAXParseException;
  * soportada y ausencia de archivos XSD: no hay falsos positivos.
  *
  * <p>Una instancia Schema es compartible entre hilos, pero cada Validator,
- * StAX reader y SAX XMLReader se crea por invocación. La caché es acotada a
- * las seis combinaciones soportadas.</p>
+ * StAX reader y SAX XMLReader se crea por invocación. La caché LRU
+ * retiene como máximo tres gramáticas para limitar la memoria de equipos modestos.</p>
  */
 public final class ValidadorXsdSat {
     public static final long LIMITE_BYTES = 8L * 1024 * 1024;
@@ -56,7 +56,12 @@ public final class ValidadorXsdSat {
             "PAGOS2.0", "sitio_internet/cfd/Pagos/Pagos20.xsd",
             "NOMINA1.2", "sitio_internet/cfd/nomina/nomina12.xsd");
     private final Path raizXsd;
-    private final ConcurrentHashMap<String, Schema> cache = new ConcurrentHashMap<>();
+    private final Map<String, Schema> cache = new LinkedHashMap<>(4, 0.75f, true) {
+        private static final long serialVersionUID = 1L;
+        @Override protected boolean removeEldestEntry(Map.Entry<String, Schema> eldest) {
+            return size() > 3;
+        }
+    };
 
     /** Estado terminal de una verificación; solo VALIDO significa XSD verificado. */
     public enum Estado { VALIDO, INVALIDO, INCOMPATIBLE, SIN_ESQUEMA, ERROR }
@@ -123,8 +128,10 @@ public final class ValidadorXsdSat {
         String version = inspeccion.version();
         String tipo = inspeccion.tipo();
         String principal = "RETENCION".equals(identidad) ? "RET2.0" : version;
-        if (!ESQUEMAS.containsKey(principal)
-                || ("CFDI".equals(identidad) && !List.of("I", "E", "T", "P", "N").contains(tipo))) {
+        if (principal == null || !ESQUEMAS.containsKey(principal)
+                || ("RETENCION".equals(identidad) && !"2.0".equals(version))
+                || ("CFDI".equals(identidad) && tipo != null
+                    && !List.of("I", "E", "T", "P", "N").contains(tipo))) {
             return resultado(ruta, Estado.INCOMPATIBLE, identidad, version, tipo,
                     "Familia, versión o tipo de comprobante todavía no soportado", 0, 0);
         }
@@ -144,8 +151,13 @@ public final class ValidadorXsdSat {
         String clave = principal + ":" + String.join(",", complementos.stream().sorted().toList());
         Schema schema;
         try {
-            schema = cache.computeIfAbsent(clave,
-                    ignored -> construirEsquema(principal, complementos));
+            synchronized (cache) {
+                schema = cache.get(clave);
+                if (schema == null) {
+                    schema = construirEsquema(principal, complementos);
+                    cache.put(clave, schema);
+                }
+            }
         } catch (EsquemaNoDisponible ex) {
             return resultado(ruta, Estado.SIN_ESQUEMA, identidad, version, tipo,
                     ex.getMessage(), 0, 0);
