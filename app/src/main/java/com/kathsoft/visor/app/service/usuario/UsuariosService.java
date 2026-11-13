@@ -25,6 +25,7 @@ import com.kathsoft.visor.app.service.rol.RolesService;
 import com.kathsoft.visor.app.service.contribuyente.ContribuyentesService;
 import com.kathsoft.visor.app.service.tercero.TercerosService;
 import com.kathsoft.visor.app.service.importacion.ImportacionCfdiService;
+import com.kathsoft.visor.app.service.validacion.ValidacionTecnicaService;
 import com.kathsoft.visor.app.service.configuracion.ConfiguracionLocalService;
 import java.io.IOException;
 import com.kathsoft.visor.app.service.periodo.PeriodosFiscalesService;
@@ -107,6 +108,11 @@ public final class UsuariosService {
         } catch (IOException ex) {
             throw new IllegalStateException("No se pudo leer el repositorio XML configurado", ex);
         }
+    }
+
+    /** @return validador de XML/XSD SAT para la sesión, sin acceso web a esquemas */
+    public ValidacionTecnicaService validacionesTecnicas() {
+        return new ValidacionTecnicaService(jpa, ValidacionTecnicaService.carpetaEsquemas());
     }
 
     /**
