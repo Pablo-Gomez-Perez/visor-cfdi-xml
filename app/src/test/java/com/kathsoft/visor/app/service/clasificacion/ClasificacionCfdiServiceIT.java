@@ -108,6 +108,17 @@ class ClasificacionCfdiServiceIT {
                                 + "VALUES (:id,'01')")
                                 .setParameter("id", id).executeUpdate();
                     }
+                    // El esquema exige participantes previos y RFC coincidente
+                    // con el sentido EMITIDO o RECIBIDO del titular.
+                    String titularRfc = i == 7 ? "BBB010101BB1" : "ABC010101AB1";
+                    boolean recibido = i == 4 || i == 5;
+                    em.createNativeQuery(
+                            "INSERT INTO documento_participante(documento_id,rol,rfc) "
+                            + "VALUES (:id,'E',:emisor),(:id,'R',:receptor)")
+                            .setParameter("id", id)
+                            .setParameter("emisor", recibido ? "ZZZ010101ZZ1" : titularRfc)
+                            .setParameter("receptor", recibido ? titularRfc : "ZZZ010101ZZ1")
+                            .executeUpdate();
                     em.createNativeQuery(
                             "INSERT INTO contribuyente_documento"
                             + "(contribuyente_id,documento_id,sentido) "
