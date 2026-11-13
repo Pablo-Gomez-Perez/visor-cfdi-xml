@@ -43,6 +43,8 @@ public class PanelClasificacionCfdi extends JPanel {
     private boolean tieneSiguiente;
     private int pagina;
     private int generacion;
+    private FiltroClasificacionFiscal ultimoFiltro;
+    private long ultimoContribuyente = -1L;
 
     private JComboBox<ContribuyenteDisponible> cmbContribuyente;
     private JComboBox<Categoria> cmbCategoria;
@@ -73,6 +75,8 @@ public class PanelClasificacionCfdi extends JPanel {
             ocupado = false;
             tieneSiguiente = false;
             pagina = 0;
+            ultimoFiltro = null;
+            ultimoContribuyente = -1L;
             modelo.setRowCount(0);
             cmbContribuyente.removeAllItems();
             lblEstado.setText("No tiene permiso para consultar la clasificación");
@@ -88,6 +92,8 @@ public class PanelClasificacionCfdi extends JPanel {
         ocupado = true;
         tieneSiguiente = false;
         pagina = 0;
+        ultimoFiltro = null;
+        ultimoContribuyente = -1L;
         modelo.setRowCount(0);
         lblEstado.setText("Cargando contribuyentes autorizados...");
         actualizarControles();
@@ -220,6 +226,10 @@ public class PanelClasificacionCfdi extends JPanel {
             error(ex);
             return;
         }
+        // Si los filtros cambiaron, la navegación debe reiniciar en página cero.
+        final int paginaSolicitada = nuevaPagina != 0
+                && (!filtro.equals(ultimoFiltro) || ultimoContribuyente != c.id())
+                ? 0 : nuevaPagina;
         final int solicitud = ++generacion;
         final Long operador = sesion.id();
         final long contribuyenteId = c.id();
@@ -228,13 +238,15 @@ public class PanelClasificacionCfdi extends JPanel {
         lblEstado.setText("Consultando clasificación...");
         new SwingWorker<Pagina, Void>() {
             @Override protected Pagina doInBackground() {
-                return servicio.consultar(operador, contribuyenteId, filtro, nuevaPagina);
+                return servicio.consultar(operador, contribuyenteId, filtro, paginaSolicitada);
             }
             @Override protected void done() {
                 if (solicitud != generacion || !autorizado) return;
                 try {
                     Pagina resultado = get();
                     pagina = resultado.indice();
+                    ultimoFiltro = filtro;
+                    ultimoContribuyente = contribuyenteId;
                     tieneSiguiente = resultado.tieneSiguiente();
                     modelo.setRowCount(0);
                     for (DocumentoClasificado d : resultado.documentos()) {
