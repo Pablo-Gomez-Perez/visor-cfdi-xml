@@ -209,5 +209,5 @@ BEGIN
     )) AS t
    WHERE t.atributo <> 'MontoTotalPagos' AND t.atributo REGEXP '^Total';
   END IF;
-END$
+END$$
 DELIMITER ;
