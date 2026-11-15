@@ -44,6 +44,7 @@ public final class ValidadorXsdSat {
     private static final String CFDI40 = "http://www.sat.gob.mx/cfd/4";
     private static final String CFDI33 = "http://www.sat.gob.mx/cfd/3";
     private static final String RET20 = "http://www.sat.gob.mx/esquemas/retencionpago/2";
+    private static final String PAGO10 = "http://www.sat.gob.mx/Pagos";
     private static final String PAGO20 = "http://www.sat.gob.mx/Pagos20";
     private static final String NOMINA12 = "http://www.sat.gob.mx/nomina12";
     private static final String TFD = "http://www.sat.gob.mx/TimbreFiscalDigital";
@@ -53,6 +54,7 @@ public final class ValidadorXsdSat {
             "3.3", "sitio_internet/cfd/3/cfdv33.xsd",
             "RET2.0", "esquemas/retencionpago/2/retencionpagov2.xsd",
             "TFD1.1", "sitio_internet/cfd/TimbreFiscalDigital/TimbreFiscalDigitalv11.xsd",
+            "PAGOS1.0", "sitio_internet/cfd/Pagos/Pagos10.xsd",
             "PAGOS2.0", "sitio_internet/cfd/Pagos/Pagos20.xsd",
             "NOMINA1.2", "sitio_internet/cfd/nomina/nomina12.xsd");
     private final Path raizXsd;
@@ -137,7 +139,10 @@ public final class ValidadorXsdSat {
         }
         Set<String> complementos = inspeccion.complementos();
         if (!complementos.contains("TFD1.1")
-                || ("P".equals(tipo) != complementos.contains("PAGOS2.0"))
+                || ("P".equals(tipo) != (complementos.contains("PAGOS2.0")
+                    || complementos.contains("PAGOS1.0")))
+                || (complementos.contains("PAGOS1.0") && (!"3.3".equals(version)
+                    || complementos.contains("PAGOS2.0")))
                 || ("N".equals(tipo) != complementos.contains("NOMINA1.2"))) {
             return resultado(ruta, Estado.INCOMPATIBLE, identidad, version, tipo,
                     "Falta timbre 1.1 o complemento compatible con el tipo P/N", 0, 0);
@@ -270,6 +275,9 @@ public final class ValidadorXsdSat {
                             case TFD -> "TimbreFiscalDigital".equals(nombre)
                                     && "1.1".equals(xml.getAttributeValue(null, "Version"))
                                         ? "TFD1.1" : "TFD_NO_SOPORTADO";
+                            case PAGO10 -> "Pagos".equals(nombre)
+                                    && "1.0".equals(xml.getAttributeValue(null, "Version"))
+                                        ? "PAGOS1.0" : "PAGOS_NO_SOPORTADO";
                             case PAGO20 -> "Pagos".equals(nombre)
                                     && "2.0".equals(xml.getAttributeValue(null, "Version"))
                                         ? "PAGOS2.0" : "PAGOS_NO_SOPORTADO";

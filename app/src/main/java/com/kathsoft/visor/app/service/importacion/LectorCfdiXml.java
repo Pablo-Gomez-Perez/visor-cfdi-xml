@@ -119,7 +119,8 @@ public final class LectorCfdiXml {
                         }
                         root = true;
                         String version = requerido(xml, "Version");
-                        if (!"4.0".equals(version) && !"3.3".equals(version)) {
+                        if (!("4.0".equals(version) && CFDI.equals(xml.getNamespaceURI()))
+                                && !("3.3".equals(version) && CFDI33.equals(xml.getNamespaceURI()))) {
                             throw new IllegalArgumentException("Versión CFDI no soportada: " + version);
                         }
                         datos.put("version", version);
@@ -157,12 +158,18 @@ public final class LectorCfdiXml {
                             put(timbre, "noCertificadoSat", requerido(xml, "NoCertificadoSAT"));
                             put(timbre, "selloCfd", atributo(xml, "SelloCFD"));
                             put(timbre, "selloSat", atributo(xml, "SelloSAT"));
-                        } else if (LectorComplementosCfdi.PAGOS20.equals(xml.getNamespaceURI())
+                        } else if ((LectorComplementosCfdi.PAGOS20.equals(xml.getNamespaceURI())
+                                || LectorPagos10.NAMESPACE.equals(xml.getNamespaceURI()))
                                 && "Pagos".equals(nombre)) {
                             if (datos.containsKey("pagos")) {
                                 throw new IllegalArgumentException("Complemento Pagos duplicado");
                             }
-                            datos.put("pagos", LectorComplementosCfdi.pagos(xml));
+                            boolean historico = LectorPagos10.NAMESPACE.equals(xml.getNamespaceURI());
+                            if (historico && !"3.3".equals(datos.get("version"))) {
+                                throw new IllegalArgumentException("Pagos 1.0 requiere CFDI 3.3");
+                            }
+                            datos.put("pagos", historico ? LectorPagos10.leer(xml)
+                                    : LectorComplementosCfdi.pagos(xml));
                             profundidad--;
                         } else if (LectorComplementosCfdi.NOMINA12.equals(xml.getNamespaceURI())
                                 && "Nomina".equals(nombre)) {
@@ -173,7 +180,9 @@ public final class LectorCfdiXml {
                             profundidad--;
                         } else {
                             throw new IllegalArgumentException(
-                                    "Complemento no soportado por RF-007: " + nombre);
+                                    "Complemento no soportado por RF-007: " + nombre
+                                     + " namespace=" + xml.getNamespaceURI()
+                                     + " versión=" + atributo(xml, "Version"));
                         }
                     } else if (esCfdi(xml) && "Emisor".equals(nombre)) {
                         put(emisor, "rfc", requerido(xml, "Rfc").toUpperCase(Locale.ROOT));
