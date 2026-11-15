@@ -3,6 +3,8 @@
 -- MySQL DDL hace commit implícito; no usar --force; no ejecutar en paralelo.
 -- No elimina documentos ni sobrescribe XML existentes.
 
+USE visor_cfdi;
+
 CREATE TABLE pago_fiscal_complemento (
   documento_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
   version_complemento VARCHAR(8) NOT NULL,

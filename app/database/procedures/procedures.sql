@@ -1,7 +1,4 @@
--- Instalación completa de rutinas en la base seleccionada. Ejecutar como script MySQL.
-DELIMITER $$
-DROP PROCEDURE IF EXISTS sp_rf007_importar_cfdi$$
-CREATE PROCEDURE sp_rf007_importar_cfdi(
+CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_cfdi`(
     IN p_lote_id BIGINT UNSIGNED,
     IN p_ordinal INT UNSIGNED,
     IN p_repositorio_id BIGINT UNSIGNED,
@@ -347,10 +344,9 @@ BEGIN
     VALUES (v_usuario_id,v_contribuyente_id,'DOCUMENTO_FISCAL',v_documento_id,
             IF(p_duplicado=1,'VINCULAR','IMPORTAR'),
             CONCAT('RF-007; UUID=',v_uuid,'; lote=',p_lote_id));
-END$$
+END;
 
-DROP PROCEDURE IF EXISTS sp_rf007_importar_nomina$$
-CREATE PROCEDURE sp_rf007_importar_nomina(
+CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_nomina`(
  IN p_documento_id BIGINT UNSIGNED,
  IN p_cfdi JSON
 )
@@ -465,10 +461,9 @@ BEGIN
       tipo VARCHAR(5) PATH '$.tipo',
       importe DECIMAL(20,6) PATH '$.importe'
     )) AS i;
-END$$
+END;
 
-DROP PROCEDURE IF EXISTS sp_rf007_importar_pago$$
-CREATE PROCEDURE sp_rf007_importar_pago(
+CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_pago`(
  IN p_documento_id BIGINT UNSIGNED,
  IN p_cfdi JSON
 )
@@ -630,10 +625,9 @@ BEGIN
     )) AS t
    WHERE t.atributo <> 'MontoTotalPagos' AND t.atributo REGEXP '^Total';
   END IF;
-END$$
+END;
 
-DROP PROCEDURE IF EXISTS sp_rf007_importar_retencion$$
-CREATE PROCEDURE sp_rf007_importar_retencion(
+CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_retencion`(
     IN p_lote_id BIGINT UNSIGNED,
     IN p_ordinal INT UNSIGNED,
     IN p_repositorio_id BIGINT UNSIGNED,
@@ -809,5 +803,4 @@ BEGIN
   VALUES(v_usuario,v_contribuyente,'DOCUMENTO_FISCAL',v_doc,
       IF(p_duplicado=1,'VINCULAR','IMPORTAR'),
       CONCAT('RF-007 Retenciones 2.0 UUID=',v_uuid,' lote=',p_lote_id));
-END$$
-DELIMITER ;
+END;
