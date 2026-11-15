@@ -347,7 +347,7 @@ BEGIN
     VALUES (v_usuario_id,v_contribuyente_id,'DOCUMENTO_FISCAL',v_documento_id,
             IF(p_duplicado=1,'VINCULAR','IMPORTAR'),
             CONCAT('RF-007; UUID=',v_uuid,'; lote=',p_lote_id));
-END$
+END$$
 
 DROP PROCEDURE IF EXISTS sp_rf007_importar_nomina$$
 CREATE PROCEDURE sp_rf007_importar_nomina(
@@ -465,7 +465,7 @@ BEGIN
       tipo VARCHAR(5) PATH '$.tipo',
       importe DECIMAL(20,6) PATH '$.importe'
     )) AS i;
-END$
+END$$
 
 DROP PROCEDURE IF EXISTS sp_rf007_importar_pago$$
 CREATE PROCEDURE sp_rf007_importar_pago(
@@ -630,7 +630,7 @@ BEGIN
     )) AS t
    WHERE t.atributo <> 'MontoTotalPagos' AND t.atributo REGEXP '^Total';
   END IF;
-END$
+END$$
 
 DROP PROCEDURE IF EXISTS sp_rf007_importar_retencion$$
 CREATE PROCEDURE sp_rf007_importar_retencion(
@@ -809,5 +809,5 @@ BEGIN
   VALUES(v_usuario,v_contribuyente,'DOCUMENTO_FISCAL',v_doc,
       IF(p_duplicado=1,'VINCULAR','IMPORTAR'),
       CONCAT('RF-007 Retenciones 2.0 UUID=',v_uuid,' lote=',p_lote_id));
-END$
+END$$
 DELIMITER ;
