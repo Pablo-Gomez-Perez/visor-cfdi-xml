@@ -17,7 +17,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 
 /** Importación real con las rutinas SQL publicadas y MySQL 8 desechable. */
-@Testcontainers(disabledWithoutDocker = true)
+@Testcontainers
 class ImportacionPagosHistoricosIT {
     @TempDir Path temporal;
 

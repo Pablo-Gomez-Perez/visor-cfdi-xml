@@ -11,7 +11,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.release>17</maven.compiler.release>
         <hibernate.version>7.4.14.Final</hibernate.version>
-        <testcontainers.version>1.21.3</testcontainers.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
     <dependencies>
         <dependency>
