@@ -55,6 +55,13 @@ Java SE 17, Maven, Swing, Eclipse WindowBuilder, GroupLayout, FlatLaf, Hibernate
 
 **Documentación:** [docs/RF-004.md](docs/RF-004.md).
 
+### RF-009 — Identificación y clasificación documental
+- Separa los CFDI I/E/T/N/P de los comprobantes de Retenciones e Información de Pagos.
+- Catálogo paginado por contribuyente con filtros de tipo, sentido y UUID; identifica inconsistencias del registro local.
+- Acceso en CFDI → Clasificación de comprobantes, SwingWorker y permiso granular de RF-003.
+- No modifica documentos ni sustituye validación XSD o comprobación de estatus SAT.
+- Detalles: [docs/RF-009.md](docs/RF-009.md).
+
 ### RF-006 — Consulta de periodos fiscales (en desarrollo)
 - Consultas por ejercicio, mes y rango de fechas, seleccionando emisión, certificación, registro o fecha del nodo Pago.
 - Lectura restringida por permiso `PERIODOS_FISCALES.CONSULTAR` y asignación explícita al contribuyente.

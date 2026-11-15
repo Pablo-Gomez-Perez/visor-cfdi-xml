@@ -33,6 +33,8 @@ import com.kathsoft.visor.app.service.importacion.ImportacionCfdiService;
 import com.kathsoft.visor.app.view.importacion.PanelImportacionCfdi;
 import com.kathsoft.visor.app.view.validacion.PanelValidacionTecnica;
 import com.kathsoft.visor.app.service.validacion.ValidacionTecnicaService;
+import com.kathsoft.visor.app.service.clasificacion.ClasificacionCfdiService;
+import com.kathsoft.visor.app.view.clasificacion.PanelClasificacionCfdi;
 import com.kathsoft.visor.app.service.usuario.UsuariosService;
 import com.kathsoft.visor.app.view.rol.PanelRoles;
 import com.kathsoft.visor.app.view.usuario.Fr_Login;
@@ -56,6 +58,7 @@ public class Fr_Principal extends JFrame {
     private static final String CARD_PERIODOS = "panelPeriodos";
     private static final String CARD_IMPORTACION = "panelImportacion";
     private static final String CARD_VALIDACION = "panelValidacion";
+    private static final String CARD_CLASIFICACION = "panelClasificacion";
 
     private UsuariosService usuarios;
     private RolesService roles;
@@ -64,6 +67,7 @@ public class Fr_Principal extends JFrame {
     private PeriodosFiscalesService periodos;
     private ImportacionCfdiService importaciones;
     private ValidacionTecnicaService validaciones;
+    private ClasificacionCfdiService clasificaciones;
     private UsuarioSesion sesion;
 
     private JMenuBar barraMenu;
@@ -80,6 +84,7 @@ public class Fr_Principal extends JFrame {
     private JMenuItem opcionAdministrarXml;
     private JMenuItem opcionCargarXml;
     private JMenuItem opcionValidarXml;
+    private JMenuItem opcionClasificacion;
     private JMenuItem opcionActualizarPermisos;
     private JMenuItem opcionCerrarSesion;
     private JMenuItem opcionSalir;
@@ -96,6 +101,7 @@ public class Fr_Principal extends JFrame {
     private PanelPeriodosFiscales panelPeriodos;
     private PanelImportacionCfdi panelImportacion;
     private PanelValidacionTecnica panelValidacion;
+    private PanelClasificacionCfdi panelClasificacion;
     private JButton btnInicio;
     private JButton btnContribuyentes;
     private JButton btnAdministrarXml;
@@ -125,6 +131,7 @@ public class Fr_Principal extends JFrame {
         this.periodos = usuarios == null ? null : usuarios.periodosFiscales();
         this.importaciones = usuarios == null ? null : usuarios.importaciones();
         this.validaciones = usuarios == null ? null : usuarios.validacionesTecnicas();
+        this.clasificaciones = usuarios == null ? null : usuarios.clasificaciones();
         this.sesion = sesion;
         if (sesion != null) {
             lblEstadoSesion.setText("Sesión: " + sesion.nombre() + " (" + sesion.login() + ")");
@@ -186,6 +193,10 @@ public class Fr_Principal extends JFrame {
         opcionValidarXml.setEnabled(false);
         opcionValidarXml.addActionListener(e -> actualizarPermisos(CARD_VALIDACION));
         menuCfdi.add(opcionValidarXml);
+        opcionClasificacion = new JMenuItem("Clasificación de comprobantes");
+        opcionClasificacion.setEnabled(false);
+        opcionClasificacion.addActionListener(e -> actualizarPermisos(CARD_CLASIFICACION));
+        menuCfdi.add(opcionClasificacion);
 
         menuSesion = new JMenu("Sesión");
         barraMenu.add(menuSesion);
@@ -241,6 +252,8 @@ public class Fr_Principal extends JFrame {
         panelPrincipalContenedor.add(panelImportacion, CARD_IMPORTACION);
         panelValidacion = new PanelValidacionTecnica();
         panelPrincipalContenedor.add(panelValidacion, CARD_VALIDACION);
+        panelClasificacion = new PanelClasificacionCfdi();
+        panelPrincipalContenedor.add(panelClasificacion, CARD_CLASIFICACION);
         cardLayout.show(panelPrincipalContenedor, CARD_INICIO);
 
         panelEstado = new JPanel();
@@ -285,7 +298,7 @@ public class Fr_Principal extends JFrame {
      * @param destino tarjeta requerida, o null para solo refrescar menús
      */
     private void actualizarPermisos(String destino) {
-        if (sesion == null || usuarios == null || roles == null || contribuyentes == null || terceros == null || periodos == null || importaciones == null || validaciones == null) {
+        if (sesion == null || usuarios == null || roles == null || contribuyentes == null || terceros == null || periodos == null || importaciones == null || validaciones == null || clasificaciones == null) {
             return;
         }
         opcionActualizarPermisos.setEnabled(false);
@@ -318,12 +331,23 @@ public class Fr_Principal extends JFrame {
                     boolean validarXsd = permisos.contains(Permisos.CFDI_VALIDAR_TECNICAMENTE);
                     opcionValidarXml.setEnabled(validarXsd);
                     panelValidacion.configurar(validaciones, sesion, permisos);
+                    boolean clasificar = permisos.contains(Permisos.CFDI_CONSULTAR_CLASIFICACION);
+                    opcionClasificacion.setEnabled(clasificar);
+                    panelClasificacion.configurar(clasificaciones, sesion, permisos);
                     btnContribuyentes.setEnabled(verContribuyentes);
                     panelUsuarios.configurar(usuarios, sesion, permisos);
                     panelRoles.configurar(roles, sesion, permisos);
                     panelContribuyentes.configurar(contribuyentes, sesion, permisos);
                     panelTerceros.configurar(terceros, contribuyentes, sesion, permisos);
-                    if (CARD_VALIDACION.equals(destino)) {
+                    if (CARD_CLASIFICACION.equals(destino)) {
+                        if (clasificar) {
+                            cardLayout.show(panelPrincipalContenedor, CARD_CLASIFICACION);
+                            panelClasificacion.recargar();
+                        } else {
+                            JOptionPane.showMessageDialog(Fr_Principal.this,
+                                    "No tiene permiso para consultar la clasificación.");
+                        }
+                    } else if (CARD_VALIDACION.equals(destino)) {
                         if (validarXsd) {
                             cardLayout.show(panelPrincipalContenedor, CARD_VALIDACION);
                         } else {
@@ -389,9 +413,11 @@ public class Fr_Principal extends JFrame {
                     opcionPeriodos.setEnabled(false);
                     opcionCargarXml.setEnabled(false);
                     opcionValidarXml.setEnabled(false);
+                    opcionClasificacion.setEnabled(false);
                     btnCargarXml.setEnabled(false);
                     panelImportacion.configurar(null, null, Set.of());
                     panelValidacion.configurar(null, null, Set.of());
+                    panelClasificacion.configurar(null, null, Set.of());
                     panelPeriodos.configurar(null, null, Set.of());
                     btnContribuyentes.setEnabled(false);
                     JOptionPane.showMessageDialog(Fr_Principal.this,

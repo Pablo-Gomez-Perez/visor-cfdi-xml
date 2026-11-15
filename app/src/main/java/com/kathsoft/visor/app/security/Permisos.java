@@ -33,6 +33,7 @@ public final class Permisos {
 
     public static final String CFDI_IMPORTAR = "CFDI.IMPORTAR";
     public static final String CFDI_VALIDAR_TECNICAMENTE = "CFDI.VALIDAR_TECNICAMENTE";
+    public static final String CFDI_CONSULTAR_CLASIFICACION = "CFDI.CONSULTAR_CLASIFICACION";
 
     public static final String PERIODOS_FISCALES_CONSULTAR = "PERIODOS_FISCALES.CONSULTAR";
 
@@ -68,6 +69,7 @@ public final class Permisos {
         new DefinicionPermiso("TERCEROS", "ASIGNAR_ROLES", "Asignar funciones de contraparte por contribuyente"),
         new DefinicionPermiso("CFDI", "IMPORTAR", "Importar CFDI XML para contribuyentes asignados"),
         new DefinicionPermiso("CFDI", "VALIDAR_TECNICAMENTE", "Verificar XML y esquemas XSD SAT"),
+        new DefinicionPermiso("CFDI", "CONSULTAR_CLASIFICACION", "Consultar clasificación fiscal de CFDI y retenciones"),
         new DefinicionPermiso("PERIODOS_FISCALES", "CONSULTAR", "Consultar documentos por ejercicio, mes y fecha"),
         new DefinicionPermiso("ROLES", "CONSULTAR", "Consultar el catálogo de roles"),
         new DefinicionPermiso("ROLES", "CREAR", "Crear roles personalizados"),

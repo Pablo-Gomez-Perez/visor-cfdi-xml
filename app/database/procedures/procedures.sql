@@ -1,4 +1,4 @@
-CREATE PROCEDURE `visor_cfdi`.`sp_rf007_importar_cfdi`(
+CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_cfdi`(
     IN p_lote_id BIGINT UNSIGNED,
     IN p_ordinal INT UNSIGNED,
     IN p_repositorio_id BIGINT UNSIGNED,
@@ -346,7 +346,7 @@ BEGIN
             CONCAT('RF-007; UUID=',v_uuid,'; lote=',p_lote_id));
 END;
 
-CREATE PROCEDURE `visor_cfdi`.`sp_rf007_importar_nomina`(
+CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_nomina`(
  IN p_documento_id BIGINT UNSIGNED,
  IN p_cfdi JSON
 )
@@ -463,7 +463,7 @@ BEGIN
     )) AS i;
 END;
 
-CREATE PROCEDURE `visor_cfdi`.`sp_rf007_importar_pago`(
+CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_pago`(
  IN p_documento_id BIGINT UNSIGNED,
  IN p_cfdi JSON
 )
@@ -591,7 +591,7 @@ BEGIN
    WHERE t.atributo <> 'MontoTotalPagos' AND t.atributo REGEXP '^Total';
 END;
 
-CREATE PROCEDURE `visor_cfdi`.`sp_rf007_importar_retencion`(
+CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_retencion`(
     IN p_lote_id BIGINT UNSIGNED,
     IN p_ordinal INT UNSIGNED,
     IN p_repositorio_id BIGINT UNSIGNED,
