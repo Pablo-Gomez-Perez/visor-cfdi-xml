@@ -33,7 +33,11 @@ class ImportacionPagosHistoricosIT {
         .withCopyFileToContainer(MountableFile.forHostPath(db("schema/visor_cfdi_mysql8_schema_v1.sql")),
             "/docker-entrypoint-initdb.d/01-schema.sql")
         .withCopyFileToContainer(MountableFile.forHostPath(db("procedures/procedures.sql")),
-            "/docker-entrypoint-initdb.d/02-procedures.sql");
+            "/docker-entrypoint-initdb.d/02-procedures.sql")
+        .withCopyFileToContainer(MountableFile.forClasspathResource("db/schema-pagos-pre-migracion.sql"),
+            "/tmp/schema-pagos-pre-migracion.sql")
+        .withCopyFileToContainer(MountableFile.forHostPath(db("migrations/20261115_rf007_pagos10.sql")),
+            "/tmp/migracion-pagos10.sql");
 
     @Test void importaVersionesYContinuaTrasRechazo() throws Exception {
         Path repo = temporal.resolve("repo");
@@ -77,6 +81,26 @@ class ImportacionPagosHistoricosIT {
             assertEquals(2,dup.duplicados());
             assertEquals(0,dup.nuevos());
         }
+    }
+
+    /** Ejecuta exactamente el fichero de migración entregado sobre el esquema anterior. */
+    @Test void migracionIncrementalConservaPago20Existente() throws Exception {
+        var ejecucion = MYSQL.execInContainer("sh","-ec", """
+            export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"
+            mysql -uroot -e 'CREATE DATABASE visor_migracion_it'
+            mysql -uroot visor_migracion_it < /tmp/schema-pagos-pre-migracion.sql
+            mysql -uroot visor_migracion_it < /tmp/migracion-pagos10.sql
+            mysql -uroot --batch --skip-column-names visor_migracion_it -e "
+                SELECT CONCAT(c.version_complemento,':',CAST(t.monto_total_pagos AS DECIMAL(10,2)))
+                FROM pago_fiscal_complemento c JOIN pago_fiscal_totales t USING(documento_id);
+                SELECT COUNT(*) FROM pago_fiscal_documento WHERE importe_pagado=50
+                  AND uuid_documento IS NOT NULL AND id_documento_historico IS NULL;
+                SELECT COUNT(*) FROM information_schema.routines
+                  WHERE routine_schema='visor_migracion_it' AND routine_name='sp_rf007_importar_pago';
+            "
+            """);
+        assertEquals(0,ejecucion.getExitCode(),ejecucion.getStderr());
+        assertEquals("2.0:50.00\n1\n1",ejecucion.getStdout().strip());
     }
 
     private Path escritura(String nombre,String version,int n,String complemento) throws Exception {
