@@ -219,14 +219,23 @@ public class PanelImportacionCfdi extends JPanel {
                 if (avances.isEmpty()) return;
                 Avance p = avances.get(avances.size() - 1);
                 progreso.setString(p.procesados() + " procesados; "
-                        + p.nuevos() + " nuevos, " + p.duplicados() + " duplicados");
-                lblEstado.setText("Último lote confirmado: " + p.ultimo());
+                        + p.nuevos() + " nuevos, " + p.duplicados() + " duplicados, "
+                        + p.rechazados() + " rechazados");
+                lblEstado.setText("Último archivo procesado: " + p.ultimo());
             }
             @Override protected void done() {
                 try {
                     Resultado r = get();
                     lblEstado.setText("Lote " + r.loteId() + " finalizado: "
-                            + r.nuevos() + " nuevos y " + r.duplicados() + " duplicados");
+                            + r.nuevos() + " nuevos, " + r.duplicados() + " duplicados, "
+                            + r.rechazados() + " rechazados");
+                    if (r.rechazados() > 0) {
+                        JOptionPane.showMessageDialog(PanelImportacionCfdi.this,
+                                "Lote " + r.loteId() + ": " + r.rechazados()
+                                + " archivos rechazados. Los válidos se confirmaron.\n"
+                                + "Último rechazo: " + r.ultimoRechazo(),
+                                "Importación parcial", JOptionPane.WARNING_MESSAGE);
+                    }
                     progreso.setString("Importación finalizada");
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();

@@ -17,6 +17,7 @@ tar -xzf "$TEMPORAL/sat-xsd.tar.gz" -C "$TEMPORAL"
 ORIGEN="$TEMPORAL/resources-sat-xml-${REVISION}/resources/www.sat.gob.mx"
 if [ ! -f "$ORIGEN/sitio_internet/cfd/4/cfdv40.xsd" ] ||
    [ ! -f "$ORIGEN/sitio_internet/cfd/catalogos/catCFDI.xsd" ] ||
+   [ ! -f "$ORIGEN/sitio_internet/cfd/Pagos/Pagos10.xsd" ] ||
    [ ! -f "$ORIGEN/esquemas/retencionpago/2/retencionpagov2.xsd" ]; then
   echo "El paquete XSD no contiene los archivos esperados" >&2; exit 1
 fi

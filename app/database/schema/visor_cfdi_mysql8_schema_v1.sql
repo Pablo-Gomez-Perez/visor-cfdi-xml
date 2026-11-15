@@ -922,21 +922,25 @@ CREATE TABLE `pago_fiscal_documento` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `pago_fiscal_id` bigint unsigned NOT NULL,
   `ordinal` smallint unsigned NOT NULL,
-  `uuid_documento` char(36) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL,
+  `uuid_documento` char(36) CHARACTER SET ascii COLLATE ascii_general_ci DEFAULT NULL,
   `serie` varchar(40) DEFAULT NULL,
   `folio` varchar(40) DEFAULT NULL,
   `moneda` varchar(3) NOT NULL,
   `equivalencia_dr` decimal(20,10) DEFAULT NULL,
   `num_parcialidad` int unsigned DEFAULT NULL,
   `saldo_anterior` decimal(20,6) DEFAULT NULL,
-  `importe_pagado` decimal(20,6) NOT NULL,
+  `importe_pagado` decimal(20,6) DEFAULT NULL,
   `saldo_insoluto` decimal(20,6) DEFAULT NULL,
   `objeto_impuesto` varchar(5) DEFAULT NULL,
+  `id_documento_historico` varchar(36) CHARACTER SET ascii COLLATE ascii_general_ci DEFAULT NULL,
+  `tipo_cambio_dr` decimal(20,6) DEFAULT NULL,
+  `metodo_pago_dr` varchar(5) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_pagodoc_ordinal` (`pago_fiscal_id`,`ordinal`),
   KEY `idx_pagodoc_uuid` (`uuid_documento`),
   CONSTRAINT `fk_pagodoc_pago` FOREIGN KEY (`pago_fiscal_id`) REFERENCES `pago_fiscal` (`id`),
-  CONSTRAINT `chk_pagodoc_montos` CHECK (((`ordinal` > 0) and (`importe_pagado` > 0) and ((`saldo_anterior` is null) or (`saldo_anterior` >= 0)) and ((`saldo_insoluto` is null) or (`saldo_insoluto` >= 0))))
+  CONSTRAINT `chk_pagodoc_identidad` CHECK (((`uuid_documento` is not null) and (`id_documento_historico` is null)) or ((`uuid_documento` is null) and (`id_documento_historico` is not null))),
+  CONSTRAINT `chk_pagodoc_montos` CHECK (((`ordinal` > 0) and ((`importe_pagado` is null) or (`importe_pagado` > 0)) and ((`saldo_anterior` is null) or (`saldo_anterior` >= 0)) and ((`saldo_insoluto` is null) or (`saldo_insoluto` >= 0))))
 ) ENGINE=InnoDB AUTO_INCREMENT=34 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
@@ -961,6 +965,16 @@ CREATE TABLE `pago_fiscal_impuesto_documento` (
 
 -- visor_cfdi.pago_fiscal_impuesto_pago definición
 
+CREATE TABLE pago_fiscal_grupo_impuesto10 (
+  pago_fiscal_id BIGINT UNSIGNED NOT NULL,
+  ordinal SMALLINT UNSIGNED NOT NULL,
+  total_retenidos DECIMAL(20,6) NULL,
+  total_trasladados DECIMAL(20,6) NULL,
+  PRIMARY KEY (pago_fiscal_id, ordinal),
+  CONSTRAINT fk_pfg10_pago FOREIGN KEY (pago_fiscal_id) REFERENCES pago_fiscal(id),
+  CONSTRAINT chk_pfg10_ordinal CHECK (ordinal > 0)
+) ENGINE=InnoDB;
+
 CREATE TABLE `pago_fiscal_impuesto_pago` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `pago_fiscal_id` bigint unsigned NOT NULL,
@@ -971,8 +985,10 @@ CREATE TABLE `pago_fiscal_impuesto_pago` (
   `base` decimal(20,6) DEFAULT NULL,
   `tasa_cuota` decimal(18,6) DEFAULT NULL,
   `importe` decimal(20,6) DEFAULT NULL,
+  `grupo_impuesto_10` smallint unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_pfip_ordinal` (`pago_fiscal_id`,`movimiento`,`ordinal`),
+  CONSTRAINT `fk_pfip_grupo10` FOREIGN KEY (`pago_fiscal_id`,`grupo_impuesto_10`) REFERENCES `pago_fiscal_grupo_impuesto10` (`pago_fiscal_id`,`ordinal`),
   CONSTRAINT `fk_pfip_pago` FOREIGN KEY (`pago_fiscal_id`) REFERENCES `pago_fiscal` (`id`),
   CONSTRAINT `chk_pfip_mov` CHECK ((`movimiento` in (_utf8mb4'TRASLADO',_utf8mb4'RETENCION')))
 ) ENGINE=InnoDB AUTO_INCREMENT=42 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -1298,3 +1314,235 @@ CREATE TABLE `pago_fiscal_total_impuesto` (
   CONSTRAINT `fk_pfti_tot` FOREIGN KEY (`documento_id`) REFERENCES `pago_fiscal_totales` (`documento_id`),
   CONSTRAINT `chk_pfti_importe` CHECK ((`importe_mxn` >= 0))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE pago_fiscal_complemento (
+  documento_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+  version_complemento VARCHAR(8) NOT NULL,
+  CONSTRAINT fk_pfcomp_cfdi FOREIGN KEY (documento_id) REFERENCES cfdi(documento_id),
+  CONSTRAINT chk_pfcomp_version CHECK (version_complemento IN ('1.0','2.0'))
+) ENGINE=InnoDB;
+
+-- Datos iniciales y reglas de integridad del esquema previo al volcado.
+INSERT INTO cat_tipo_cfdi (clave, descripcion) VALUES
+  ('I','Ingreso'), ('E','Egreso'), ('T','Traslado'),
+  ('N','Nomina'), ('P','Pago')
+ON DUPLICATE KEY UPDATE descripcion = VALUES(descripcion);
+
+INSERT INTO rol (clave, descripcion) VALUES
+  ('ADMIN','Administracion del sistema'),
+  ('CONTADOR','Administracion fiscal y financiera'),
+  ('AUXILIAR','Operaciones permitidas por sus permisos'),
+  ('CONSULTA','Acceso de solo lectura segun permisos')
+ON DUPLICATE KEY UPDATE descripcion=VALUES(descripcion);
+
+INSERT INTO tratamiento_impuesto (clave, descripcion) VALUES
+  ('PENDIENTE','Tratamiento fiscal pendiente de revisión'),
+  ('IVA_ACREDITABLE','IVA clasificado preliminarmente como acreditable'),
+  ('IVA_NO_ACREDITABLE','IVA clasificado como no acreditable'),
+  ('IVA_PARCIAL','IVA sujeto a proporción o clasificación parcial'),
+  ('OTRO','Otro tratamiento fiscal documentado')
+ON DUPLICATE KEY UPDATE descripcion=VALUES(descripcion);
+
+CREATE OR REPLACE VIEW v_cfdi_periodo_emision AS
+SELECT cd.contribuyente_id,
+       cd.sentido,
+       d.id AS documento_id,
+       d.uuid,
+       d.fecha_emision,
+       YEAR(d.fecha_emision) AS ejercicio_emision,
+       MONTH(d.fecha_emision) AS mes_emision,
+       c.tipo,
+       c.moneda,
+       c.subtotal,
+       c.total
+  FROM contribuyente_documento cd
+  JOIN documento_fiscal d ON d.id = cd.documento_id
+  JOIN cfdi c ON c.documento_id = d.id;
+
+CREATE OR REPLACE VIEW v_saldo_obligacion AS
+SELECT o.id AS obligacion_id,
+       o.contribuyente_id,
+       o.documento_id,
+       o.naturaleza,
+       o.moneda,
+       o.monto_original,
+       COALESCE(p.pagos, 0) AS pagos_aplicados,
+       COALESCE(a.ajustes, 0) AS ajustes_aplicados,
+       o.monto_original - COALESCE(p.pagos, 0) - COALESCE(a.ajustes, 0)
+         AS saldo_calculado,
+       CASE
+         WHEN o.monto_original - COALESCE(p.pagos, 0) - COALESCE(a.ajustes, 0) < 0
+           THEN 'SOBREAPLICADO'
+         WHEN o.monto_original - COALESCE(p.pagos, 0) - COALESCE(a.ajustes, 0) = 0
+           THEN 'LIQUIDADO'
+         WHEN COALESCE(p.pagos, 0) + COALESCE(a.ajustes, 0) = 0
+           THEN 'PENDIENTE'
+         ELSE 'PARCIAL'
+       END AS estado_calculado
+  FROM obligacion o
+  LEFT JOIN (
+    SELECT obligacion_id, SUM(importe_moneda_obligacion) AS pagos
+      FROM aplicacion_pago GROUP BY obligacion_id
+  ) p ON p.obligacion_id = o.id
+  LEFT JOIN (
+    SELECT obligacion_id, SUM(importe_moneda_obligacion) AS ajustes
+      FROM ajuste_obligacion GROUP BY obligacion_id
+  ) a ON a.obligacion_id = o.id;
+
+-- 16. REGLAS DE INTEGRIDAD NO EXPRESABLES CON FK/CHECK SIMPLES.
+-- DELIMITER es una instruccion del cliente mysql; ejecutar como SCRIPT SQL.
+DELIMITER $$
+
+-- Un contribuyente solo puede asociar CFDI donde su RFC aparece como
+-- emisor y/o receptor segun el sentido indicado. Los participantes se insertan antes.
+CREATE TRIGGER trg_contrib_doc_sentido_bi BEFORE INSERT ON contribuyente_documento FOR EACH ROW
+BEGIN
+  IF NEW.sentido IN ('EMITIDO','AMBOS') AND NOT EXISTS (
+       SELECT 1 FROM contribuyente c
+       JOIN documento_participante p ON p.rfc = c.rfc
+       WHERE c.id = NEW.contribuyente_id
+         AND p.documento_id = NEW.documento_id AND p.rol = 'E') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El RFC del contribuyente no coincide con el emisor';
+  END IF;
+  IF NEW.sentido IN ('RECIBIDO','AMBOS') AND NOT EXISTS (
+       SELECT 1 FROM contribuyente c
+       JOIN documento_participante p ON p.rfc = c.rfc
+       WHERE c.id = NEW.contribuyente_id
+         AND p.documento_id = NEW.documento_id AND p.rol = 'R') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El RFC del contribuyente no coincide con el receptor';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_contrib_doc_sentido_bu BEFORE UPDATE ON contribuyente_documento FOR EACH ROW
+BEGIN
+  IF NEW.sentido IN ('EMITIDO','AMBOS') AND NOT EXISTS (
+       SELECT 1 FROM contribuyente c
+       JOIN documento_participante p ON p.rfc = c.rfc
+       WHERE c.id = NEW.contribuyente_id
+         AND p.documento_id = NEW.documento_id AND p.rol = 'E') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El RFC del contribuyente no coincide con el emisor';
+  END IF;
+  IF NEW.sentido IN ('RECIBIDO','AMBOS') AND NOT EXISTS (
+       SELECT 1 FROM contribuyente c
+       JOIN documento_participante p ON p.rfc = c.rfc
+       WHERE c.id = NEW.contribuyente_id
+         AND p.documento_id = NEW.documento_id AND p.rol = 'R') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El RFC del contribuyente no coincide con el receptor';
+  END IF;
+END$$
+
+-- Impedir que la clasificacion de una factura se asigne a otro contribuyente.
+CREATE TRIGGER trg_clas_concepto_tenant_bi BEFORE INSERT ON clasificacion_concepto FOR EACH ROW
+BEGIN
+  IF NOT EXISTS (
+       SELECT 1 FROM contribuyente_documento cd
+       JOIN cfdi_concepto cc ON cc.documento_id = cd.documento_id
+       WHERE cc.id = NEW.concepto_id AND cd.contribuyente_id = NEW.contribuyente_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El concepto no corresponde al contribuyente';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_clas_concepto_tenant_bu BEFORE UPDATE ON clasificacion_concepto FOR EACH ROW
+BEGIN
+  IF NOT EXISTS (
+       SELECT 1 FROM contribuyente_documento cd
+       JOIN cfdi_concepto cc ON cc.documento_id = cd.documento_id
+       WHERE cc.id = NEW.concepto_id AND cd.contribuyente_id = NEW.contribuyente_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El concepto no corresponde al contribuyente';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_clas_impuesto_tenant_bi BEFORE INSERT ON clasificacion_impuesto_concepto FOR EACH ROW
+BEGIN
+  IF NOT EXISTS (
+       SELECT 1 FROM contribuyente_documento cd
+       JOIN cfdi_concepto cc ON cc.documento_id = cd.documento_id
+       JOIN cfdi_concepto_impuesto ci ON ci.concepto_id = cc.id
+       WHERE ci.id = NEW.impuesto_concepto_id AND cd.contribuyente_id = NEW.contribuyente_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El impuesto no corresponde al contribuyente';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_clas_impuesto_tenant_bu BEFORE UPDATE ON clasificacion_impuesto_concepto FOR EACH ROW
+BEGIN
+  IF NOT EXISTS (
+       SELECT 1 FROM contribuyente_documento cd
+       JOIN cfdi_concepto cc ON cc.documento_id = cd.documento_id
+       JOIN cfdi_concepto_impuesto ci ON ci.concepto_id = cc.id
+       WHERE ci.id = NEW.impuesto_concepto_id AND cd.contribuyente_id = NEW.contribuyente_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El impuesto no corresponde al contribuyente';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_cfdi_clase_bi BEFORE INSERT ON cfdi FOR EACH ROW
+BEGIN
+  IF (SELECT clase FROM documento_fiscal WHERE id = NEW.documento_id) <> 'CFDI' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El documento no pertenece a la familia CFDI';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_retencion_clase_bi BEFORE INSERT ON retencion FOR EACH ROW
+BEGIN
+  IF (SELECT clase FROM documento_fiscal WHERE id = NEW.documento_id) <> 'RETENCION' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El documento no pertenece a retenciones';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_pago_fiscal_tipo_bi BEFORE INSERT ON pago_fiscal FOR EACH ROW
+BEGIN
+  IF (SELECT tipo FROM cfdi WHERE documento_id = NEW.documento_id) <> 'P' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El complemento de pagos requiere CFDI tipo P';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_nomina_tipo_bi BEFORE INSERT ON nomina FOR EACH ROW
+BEGIN
+  IF (SELECT tipo FROM cfdi WHERE documento_id = NEW.documento_id) <> 'N' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El complemento de nomina requiere CFDI tipo N';
+  END IF;
+END$$
+
+-- No permitir asociar pagos de un contribuyente a obligaciones de otro.
+CREATE TRIGGER trg_aplicacion_pago_tenant_bi BEFORE INSERT ON aplicacion_pago FOR EACH ROW
+BEGIN
+  IF (SELECT contribuyente_id FROM movimiento_pago WHERE id = NEW.movimiento_pago_id)
+     <> (SELECT contribuyente_id FROM obligacion WHERE id = NEW.obligacion_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Pago y obligacion son de contribuyentes distintos';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_aplicacion_pago_tenant_bu BEFORE UPDATE ON aplicacion_pago FOR EACH ROW
+BEGIN
+  IF (SELECT contribuyente_id FROM movimiento_pago WHERE id = NEW.movimiento_pago_id)
+     <> (SELECT contribuyente_id FROM obligacion WHERE id = NEW.obligacion_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Pago y obligacion son de contribuyentes distintos';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_conciliacion_tenant_bi BEFORE INSERT ON conciliacion_bancaria FOR EACH ROW
+BEGIN
+  IF (SELECT cb.contribuyente_id
+        FROM movimiento_bancario mb
+        JOIN importacion_estado_bancario eb ON eb.id = mb.importacion_estado_id
+        JOIN cuenta_bancaria cb ON cb.id = eb.cuenta_bancaria_id
+       WHERE mb.id = NEW.movimiento_bancario_id)
+     <> (SELECT contribuyente_id FROM movimiento_pago WHERE id = NEW.movimiento_pago_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cuenta y movimiento corresponden a contribuyentes distintos';
+  END IF;
+END$$
+
+CREATE TRIGGER trg_conciliacion_tenant_bu BEFORE UPDATE ON conciliacion_bancaria FOR EACH ROW
+BEGIN
+  IF (SELECT cb.contribuyente_id
+        FROM movimiento_bancario mb
+        JOIN importacion_estado_bancario eb ON eb.id = mb.importacion_estado_id
+        JOIN cuenta_bancaria cb ON cb.id = eb.cuenta_bancaria_id
+       WHERE mb.id = NEW.movimiento_bancario_id)
+     <> (SELECT contribuyente_id FROM movimiento_pago WHERE id = NEW.movimiento_pago_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cuenta y movimiento corresponden a contribuyentes distintos';
+  END IF;
+END$$
+
+DELIMITER ;
+
+-- FIN DEL ESQUEMA v1.0

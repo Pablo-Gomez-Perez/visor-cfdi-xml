@@ -27,6 +27,9 @@ class ValidadorXsdSatRealIT {
         verificar(validador, "pago.xml", xml("4", "4.0", "P",
                 "<pagos:Pagos xmlns:pagos=\"http://www.sat.gob.mx/Pagos20\" Version=\"2.0\"/>"),
                 "CFDI");
+        verificar(validador, "pago10.xml", xml("3", "3.3", "P",
+                "<pagos:Pagos xmlns:pagos=\"http://www.sat.gob.mx/Pagos\" Version=\"1.0\"/>"),
+                "CFDI");
         verificar(validador, "nomina.xml", xml("4", "4.0", "N",
                 "<nomina:Nomina xmlns:nomina=\"http://www.sat.gob.mx/nomina12\" Version=\"1.2\"/>"),
                 "CFDI");
@@ -81,6 +84,52 @@ class ValidadorXsdSatRealIT {
         assertEquals(ValidadorXsdSat.Estado.VALIDO,
                 resultado.estado(), resultado.detalle());
         assertTrue(resultado.valido());
+    }
+
+    /** Comprueba que se valida el complemento histórico, no solo el CFDI base. */
+    @Test
+    void validaPagos10CompletoYDetectaMontoAusente() throws Exception {
+        String contenido = """
+                <cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/3"
+                    xmlns:pago10="http://www.sat.gob.mx/Pagos"
+                    xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital"
+                    Version="3.3" Fecha="2020-03-05T01:40:28"
+                    Sello="AA==" Certificado="AA==" NoCertificado="00001000000512345678"
+                    SubTotal="0" Moneda="XXX" Total="0" TipoDeComprobante="P"
+                    LugarExpedicion="29000">
+                  <cfdi:Emisor Rfc="AAA010101AAA" RegimenFiscal="601"/>
+                  <cfdi:Receptor Rfc="BBB010101BBA" UsoCFDI="P01"/>
+                  <cfdi:Conceptos>
+                    <cfdi:Concepto ClaveProdServ="84111506" Cantidad="1" ClaveUnidad="ACT"
+                        Descripcion="Pago" ValorUnitario="0" Importe="0"/>
+                  </cfdi:Conceptos>
+                  <cfdi:Complemento>
+                    <pago10:Pagos Version="1.0">
+                      <pago10:Pago FechaPago="2020-03-04T00:12:32" FormaDePagoP="01"
+                          MonedaP="MXN" Monto="50.00">
+                        <pago10:DoctoRelacionado IdDocumento="123e4567-e89b-12d3-a456-426614174099"
+                            MetodoDePagoDR="PPD" MonedaDR="MXN" NumParcialidad="1"
+                            ImpSaldoAnt="50.00" ImpPagado="50.00" ImpSaldoInsoluto="0.00"/>
+                      </pago10:Pago>
+                    </pago10:Pagos>
+                    <tfd:TimbreFiscalDigital Version="1.1"
+                        UUID="123e4567-e89b-12d3-a456-426614174098"
+                        FechaTimbrado="2020-03-05T01:40:31"
+                        RfcProvCertif="AAA010101AAA" SelloCFD="AA=="
+                        NoCertificadoSAT="00001000000512345678" SelloSAT="AA=="/>
+                  </cfdi:Complemento>
+                </cfdi:Comprobante>
+                """;
+        var validador = new ValidadorXsdSat(Path.of(System.getenv("VISOR_SAT_XSD_DIR")));
+        Path ruta = temporal.resolve("pago10-xsd-positivo.xml");
+        Files.writeString(ruta, contenido);
+        var resultado = validador.validar(ruta);
+        assertEquals(ValidadorXsdSat.Estado.VALIDO, resultado.estado(), resultado.detalle());
+        Path invalido = temporal.resolve("pago10-xsd-sin-monto.xml");
+        Files.writeString(invalido, contenido.replace(" Monto=\"50.00\"", ""));
+        var rechazo = validador.validar(invalido);
+        assertEquals(ValidadorXsdSat.Estado.INVALIDO, rechazo.estado(), rechazo.detalle());
+        assertTrue(rechazo.detalle().contains("Monto"), rechazo.detalle());
     }
 
     private void verificar(ValidadorXsdSat validador, String archivo,

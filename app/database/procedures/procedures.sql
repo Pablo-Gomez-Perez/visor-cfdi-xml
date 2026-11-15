@@ -468,12 +468,28 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_pago
  IN p_cfdi JSON
 )
 BEGIN
-  IF JSON_UNQUOTE(JSON_EXTRACT(p_cfdi,'$.pagos.version')) <> '2.0'
-     OR JSON_LENGTH(p_cfdi,'$.pagos.pagos') < 1
-     OR JSON_EXTRACT(p_cfdi,'$.pagos.totales.MontoTotalPagos') IS NULL
+  DECLARE v_version VARCHAR(8);
+  SET v_version=JSON_UNQUOTE(JSON_EXTRACT(p_cfdi,'$.pagos.version'));
+  IF v_version IS NULL OR v_version NOT IN ('1.0','2.0')
+     OR COALESCE(JSON_LENGTH(p_cfdi,'$.pagos.pagos'),0) < 1
+     OR (v_version='2.0' AND JSON_EXTRACT(p_cfdi,'$.pagos.totales.MontoTotalPagos') IS NULL)
+     OR (v_version='1.0' AND (
+       COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p_cfdi,'$.version')),'') <> '3.3'
+       OR JSON_CONTAINS_PATH(p_cfdi,'one','$.pagos.totales')))
   THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Complemento Pagos 2.0 incompleto';
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Complemento Pagos incompleto o version incompatible';
   END IF;
+  IF v_version='2.0' AND EXISTS (
+    SELECT 1 FROM JSON_TABLE(p_cfdi,'$.pagos.pagos[*]' COLUMNS (
+      NESTED PATH '$.documentos[*]' COLUMNS (
+        ordinal_doc FOR ORDINALITY, pagado DECIMAL(20,6) PATH '$.pagado'
+      )
+    )) d WHERE d.ordinal_doc IS NOT NULL AND d.pagado IS NULL
+  ) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Pagos 2.0 requiere ImpPagado';
+  END IF;
+  INSERT INTO pago_fiscal_complemento(documento_id,version_complemento)
+  VALUES(p_documento_id,v_version);
 
   INSERT INTO pago_fiscal
     (documento_id,ordinal,fecha_pago,forma_pago,moneda,tipo_cambio,monto,
@@ -506,10 +522,10 @@ BEGIN
   INSERT INTO pago_fiscal_documento
     (pago_fiscal_id,ordinal,uuid_documento,serie,folio,moneda,
      equivalencia_dr,num_parcialidad,saldo_anterior,importe_pagado,
-     saldo_insoluto,objeto_impuesto)
+     saldo_insoluto,objeto_impuesto,id_documento_historico,tipo_cambio_dr,metodo_pago_dr)
   SELECT pf.id, d.ordinal_doc, d.uuid, d.serie, d.folio, d.moneda,
          d.equivalencia,d.parcialidad,d.saldo_anterior,d.pagado,
-         d.saldo_insoluto,d.objeto
+         d.saldo_insoluto,d.objeto,d.id_historico,d.tipo_cambio_dr,d.metodo_pago_dr
     FROM JSON_TABLE(p_cfdi,'$.pagos.pagos[*]' COLUMNS (
       ordinal_pago FOR ORDINALITY,
       NESTED PATH '$.documentos[*]' COLUMNS (
@@ -523,7 +539,10 @@ BEGIN
         saldo_anterior DECIMAL(20,6) PATH '$.saldoAnterior',
         pagado DECIMAL(20,6) PATH '$.pagado',
         saldo_insoluto DECIMAL(20,6) PATH '$.saldoInsoluto',
-        objeto VARCHAR(5) PATH '$.objeto'
+        objeto VARCHAR(5) PATH '$.objeto',
+        id_historico VARCHAR(36) PATH '$.idHistorico',
+        tipo_cambio_dr DECIMAL(20,6) PATH '$.tipoCambioDR',
+        metodo_pago_dr VARCHAR(5) PATH '$.metodoPagoDR'
       )
     )) AS d
     JOIN pago_fiscal pf ON pf.documento_id=p_documento_id
@@ -556,10 +575,24 @@ BEGIN
       AND pd.ordinal=i.ordinal_doc
    WHERE i.ordinal_tax IS NOT NULL;
 
+  INSERT INTO pago_fiscal_grupo_impuesto10
+    (pago_fiscal_id,ordinal,total_retenidos,total_trasladados)
+  SELECT pf.id,g.ordinal_grupo,g.retenidos,g.trasladados
+    FROM JSON_TABLE(p_cfdi,'$.pagos.pagos[*]' COLUMNS (
+      ordinal_pago FOR ORDINALITY,
+      NESTED PATH '$.gruposImpuestos10[*]' COLUMNS (
+        ordinal_grupo FOR ORDINALITY,
+        retenidos DECIMAL(20,6) PATH '$.retenidos',
+        trasladados DECIMAL(20,6) PATH '$.trasladados'
+      )
+    )) g JOIN pago_fiscal pf ON pf.documento_id=p_documento_id
+      AND pf.ordinal=g.ordinal_pago
+    WHERE g.ordinal_grupo IS NOT NULL AND v_version='1.0';
+
   INSERT INTO pago_fiscal_impuesto_pago
-    (pago_fiscal_id,movimiento,ordinal,impuesto,tipo_factor,base,tasa_cuota,importe)
+    (pago_fiscal_id,movimiento,ordinal,impuesto,tipo_factor,base,tasa_cuota,importe,grupo_impuesto_10)
   SELECT pf.id,i.movimiento,i.ordinal_tax,i.impuesto,i.factor,
-         i.base,i.tasa,i.importe
+         i.base,i.tasa,i.importe,i.grupo10
     FROM JSON_TABLE(p_cfdi,'$.pagos.pagos[*]' COLUMNS (
       ordinal_pago FOR ORDINALITY,
       NESTED PATH '$.impuestos[*]' COLUMNS (
@@ -569,13 +602,15 @@ BEGIN
         factor VARCHAR(12) PATH '$.factor',
         base DECIMAL(20,6) PATH '$.base',
         tasa DECIMAL(18,6) PATH '$.tasa',
-        importe DECIMAL(20,6) PATH '$.importe'
+        importe DECIMAL(20,6) PATH '$.importe',
+        grupo10 SMALLINT UNSIGNED PATH '$.grupo10'
       )
     )) AS i
     JOIN pago_fiscal pf ON pf.documento_id=p_documento_id
       AND pf.ordinal=i.ordinal_pago
    WHERE i.ordinal_tax IS NOT NULL;
 
+  IF v_version='2.0' THEN
   INSERT INTO pago_fiscal_totales(documento_id,monto_total_pagos)
   VALUES (p_documento_id, JSON_UNQUOTE(
     JSON_EXTRACT(p_cfdi,'$.pagos.totales.MontoTotalPagos')));
@@ -589,6 +624,7 @@ BEGIN
       atributo VARCHAR(70) PATH '$'
     )) AS t
    WHERE t.atributo <> 'MontoTotalPagos' AND t.atributo REGEXP '^Total';
+  END IF;
 END;
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_retencion`(
