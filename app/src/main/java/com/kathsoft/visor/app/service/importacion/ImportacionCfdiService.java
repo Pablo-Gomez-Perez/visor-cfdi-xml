@@ -19,6 +19,8 @@ import java.security.NoSuchAlgorithmException;
 import java.sql.CallableStatement;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.time.DateTimeException;
+import javax.xml.stream.XMLStreamException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -44,8 +46,9 @@ import jakarta.persistence.EntityManager;
  *
  * <p>Máximo dos parsers, cuatro tareas pendientes y ocho documentos por lote.
  * No se construye una lista global de archivos ni se comparte EntityManager,
- * XMLStreamReader, Connection ni CallableStatement entre hilos. Un error
- * revierte el lote actual; los lotes anteriormente confirmados permanecen.</p>
+ * XMLStreamReader, Connection ni CallableStatement entre hilos. Los rechazos
+ * documentales se registran individualmente; un fallo crítico revierte el lote
+ * actual y los lotes previamente confirmados permanecen.</p>
  */
 public final class ImportacionCfdiService {
     private static final long MAX_BYTES = 8L * 1024 * 1024;
@@ -79,13 +82,26 @@ public final class ImportacionCfdiService {
 
     /** Datos compactos para notificar avance, sin retener todas las filas. */
     public record Avance(long encontrados, long procesados, long nuevos,
-            long duplicados, String ultimo) { }
+            long duplicados, long rechazados, String ultimo) { }
 
     /** Resumen de una importación completada. */
-    public record Resultado(long loteId, long encontrados, long nuevos, long duplicados) { }
+    public record Resultado(long loteId, long encontrados, long nuevos, long duplicados,
+            long rechazados, String ultimoRechazo) { }
 
     private record Preparado(Path origen, Path temporal, String clave, String sha,
             long bytes, LectorCfdiXml.Documento documento, int ordinal) { }
+
+    private record Tarea(Path origen, int ordinal, Future<Preparado> futuro) { }
+
+    /** Fallo documental recuperable, identificado independientemente del worker. */
+    private static final class RechazoXml extends IllegalArgumentException {
+        private static final long serialVersionUID = 1L;
+        private final String sha;
+        RechazoXml(String detalle, String sha, Throwable causa) {
+            super(detalle, causa);
+            this.sha = sha;
+        }
+    }
 
     /** Lista contribuyentes asignados, sin dependencia del privilegio RF-006. */
     public List<ContribuyenteImportacion> contribuyentes(Long operadorId) {
@@ -126,14 +142,14 @@ public final class ImportacionCfdiService {
         }
         long[] ids = crearLote(operadorId, solicitud.contribuyenteId());
         long lote = ids[0], repo = ids[1];
-        long[] contadores = new long[4]; // encontrados, procesados, nuevos, duplicados
+        long[] contadores = new long[5]; // encontrados, procesados, nuevos, duplicados, rechazados
         Path temporalDir = null;
         ExecutorService ejecutor = Executors.newFixedThreadPool(HILOS, r -> {
             Thread hilo = new Thread(r, "rf007-lector-xml");
             hilo.setDaemon(true);
             return hilo;
         });
-        Deque<Future<Preparado>> cola = new ArrayDeque<>();
+        Deque<Tarea> cola = new ArrayDeque<>();
         List<Preparado> pendientes = new ArrayList<>(TAMANO_LOTE);
         final int[] ordinal = {0};
         try {
@@ -187,8 +203,17 @@ public final class ImportacionCfdiService {
             }
             confirmar(pendientes, cancelar, contadores, progreso,
                     operadorId, solicitud.contribuyenteId(), repo, lote);
-            finalizar(lote, "FINALIZADO");
-            return new Resultado(lote, contadores[0], contadores[2], contadores[3]);
+            String ultimoRechazo = contadores[4] == 0 ? null : jpa.consultar(em -> {
+                exigirAcceso(em, operadorId, solicitud.contribuyenteId());
+                Object[] fila = (Object[]) em.createNativeQuery(
+                    "SELECT nombre_archivo,detalle FROM importacion_archivo "
+                    + "WHERE lote_id=?1 AND resultado='RECHAZADO' ORDER BY ordinal DESC")
+                    .setParameter(1,lote).setMaxResults(1).getSingleResult();
+                return fila[0] + ": " + fila[1];
+            });
+            finalizar(lote, contadores[4] == 0 ? "FINALIZADO" : "PARCIAL");
+            return new Resultado(lote, contadores[0], contadores[2], contadores[3],
+                    contadores[4], ultimoRechazo);
         } catch (IOException ex) {
             UncheckedIOException fallo = new UncheckedIOException(
                     "Error de archivos en importación " + lote, ex);
@@ -212,7 +237,7 @@ public final class ImportacionCfdiService {
     }
 
     private void enviar(Path archivo, Path staging, String rfc, ExecutorService ejecutor,
-            Deque<Future<Preparado>> cola, List<Preparado> pendientes,
+            Deque<Tarea> cola, List<Preparado> pendientes,
             BooleanSupplier cancelar, long[] contadores, Consumer<Avance> progreso,
             Long usuario, long contribuyente, long repo, long lote, int[] ordinal) {
         if (!archivo.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".xml")) return;
@@ -221,26 +246,38 @@ public final class ImportacionCfdiService {
         }
         contadores[0]++;
         int numero = ++ordinal[0];
-        cola.addLast(ejecutor.submit(() -> preparar(archivo, staging, rfc, numero)));
+        cola.addLast(new Tarea(archivo, numero,
+                ejecutor.submit(() -> preparar(archivo, staging, rfc, numero))));
         if (cola.size() >= EN_VUELO) {
             retirar(cola, pendientes, cancelar, contadores, progreso,
                     usuario, contribuyente, repo, lote);
         }
     }
 
-    private void retirar(Deque<Future<Preparado>> cola, List<Preparado> pendientes,
+    private void retirar(Deque<Tarea> cola, List<Preparado> pendientes,
             BooleanSupplier cancelar, long[] contadores, Consumer<Avance> progreso,
             Long usuario, long contribuyente, long repo, long lote) {
         verificarCancelacion(cancelar);
-        Future<Preparado> futuro = cola.removeFirst();
+        Tarea tarea = cola.removeFirst();
         try {
-            pendientes.add(futuro.get());
+            pendientes.add(tarea.futuro().get());
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new CancellationException("Importación interrumpida");
         } catch (ExecutionException ex) {
-            throw new IllegalArgumentException("Error al procesar XML: "
-                    + ex.getCause().getMessage(), ex.getCause());
+            Throwable causa = ex.getCause();
+            if (causa instanceof RechazoXml rechazo) {
+                registrarRechazo(usuario, contribuyente, lote, tarea, rechazo);
+                contadores[1]++;
+                contadores[4]++;
+                progreso.accept(new Avance(contadores[0],contadores[1],contadores[2],
+                        contadores[3],contadores[4], "RECHAZADO: "
+                        + tarea.origen().getFileName()));
+            } else {
+                if (causa instanceof Error error) throw error;
+                throw new IllegalStateException("Error crítico procesando " + tarea.origen()
+                        + ": " + causa.getMessage(), causa);
+            }
         }
         if (pendientes.size() == TAMANO_LOTE) {
             confirmar(pendientes, cancelar, contadores, progreso,
@@ -252,12 +289,11 @@ public final class ImportacionCfdiService {
             int ordinal) throws Exception {
         if (archivo.getFileName().toString().length() > 260
                 || archivo.toAbsolutePath().toString().length() > 1024) {
-            throw new IllegalArgumentException("Nombre o ruta origen fuera del límite MySQL: "
-                    + archivo);
+            throw new RechazoXml("Nombre o ruta origen fuera del límite MySQL", null, null);
         }
         long tamano = Files.size(archivo);
         if (tamano <= 0 || tamano > MAX_BYTES) {
-            throw new IllegalArgumentException("Tamaño XML fuera de rango (1 a 8 MiB): " + archivo);
+            throw new RechazoXml("Tamaño XML fuera de rango (1 a 8 MiB)", null, null);
         }
         Path temporal = Files.createTempFile(staging, "cfdi-", ".tmp");
         boolean exito = false;
@@ -271,16 +307,23 @@ public final class ImportacionCfdiService {
                 while ((n = in.read(buffer)) != -1) {
                     bytes += n;
                     if (bytes > MAX_BYTES) {
-                        throw new IllegalArgumentException("XML excedió 8 MiB: " + archivo);
+                        throw new RechazoXml("XML excedió 8 MiB", null, null);
                     }
                     out.write(buffer, 0, n);
                 }
             }
             String sha = HexFormat.of().formatHex(digest.digest());
-            LectorCfdiXml.Documento doc = new LectorCfdiXml().leer(temporal);
+            LectorCfdiXml.Documento doc;
+            try {
+                doc = new LectorCfdiXml().leer(temporal);
+            } catch (IllegalArgumentException | DateTimeException | XMLStreamException ex) {
+                throw new RechazoXml(DiagnosticoXml.describir(temporal) + " | Causa: "
+                        + DiagnosticoXml.acotar(ex.getMessage(),400), sha, ex);
+            }
             if (!rfc.equalsIgnoreCase(doc.emisorRfc())
                     && !rfc.equalsIgnoreCase(doc.receptorRfc())) {
-                throw new SecurityException("RFC emisor/receptor ajeno al contribuyente: " + archivo);
+                throw new RechazoXml(DiagnosticoXml.describir(temporal)
+                        + " | RFC emisor/receptor ajeno al contribuyente", sha, null);
             }
             exito = true;
             return new Preparado(archivo, temporal,
@@ -289,6 +332,24 @@ public final class ImportacionCfdiService {
         } finally {
             if (!exito) Files.deleteIfExists(temporal);
         }
+    }
+
+    /** Persiste el rechazo sin tocar documentos fiscales ni originales. */
+    private void registrarRechazo(Long usuario, long contribuyente, long lote,
+            Tarea tarea, RechazoXml rechazo) {
+        jpa.enTransaccion(em -> {
+            exigirAcceso(em, usuario, contribuyente);
+            em.createNativeQuery("INSERT INTO importacion_archivo "
+                    + "(lote_id,ordinal,nombre_archivo,ruta_origen,sha256,resultado,detalle) "
+                    + "VALUES (?1,?2,?3,?4,UNHEX(?5),'RECHAZADO',?6)")
+                .setParameter(1,lote).setParameter(2,tarea.ordinal())
+                .setParameter(3,DiagnosticoXml.acotar(tarea.origen().getFileName().toString(),260))
+                .setParameter(4,DiagnosticoXml.acotar(tarea.origen().toAbsolutePath().toString(),1024))
+                .setParameter(5,rechazo.sha)
+                .setParameter(6,DiagnosticoXml.acotar(rechazo.getMessage(),1000))
+                .executeUpdate();
+            return null;
+        });
     }
 
     private void confirmar(List<Preparado> pendientes, BooleanSupplier cancelar,
@@ -343,7 +404,8 @@ public final class ImportacionCfdiService {
                             throw new SQLException("RF-007: fallo importando "
                                     + p.origen().getFileName() + " (ordinal "
                                     + p.ordinal() + ", clase " + p.documento().clase()
-                                    + ", tipo " + p.documento().tipo() + "): "
+                                    + ", tipo " + p.documento().tipo() + ", UUID " + p.documento().uuid()
+                                    + ", ruta " + p.origen() + "): "
                                     + diagnosticarErrorProcedimiento(
                                             p.documento().tipo(), er.getMessage()),
                                     er.getSQLState(), er.getErrorCode(), er);
@@ -364,7 +426,7 @@ public final class ImportacionCfdiService {
         Preparado ultimo = pendientes.get(pendientes.size() - 1);
         pendientes.clear();
         progreso.accept(new Avance(contadores[0], contadores[1],
-                contadores[2], contadores[3], ultimo.origen().getFileName().toString()));
+                contadores[2], contadores[3], contadores[4], ultimo.origen().getFileName().toString()));
     }
 
     /**
