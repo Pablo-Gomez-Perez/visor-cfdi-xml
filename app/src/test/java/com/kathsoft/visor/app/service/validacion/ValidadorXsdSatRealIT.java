@@ -27,6 +27,9 @@ class ValidadorXsdSatRealIT {
         verificar(validador, "pago.xml", xml("4", "4.0", "P",
                 "<pagos:Pagos xmlns:pagos=\"http://www.sat.gob.mx/Pagos20\" Version=\"2.0\"/>"),
                 "CFDI");
+        verificar(validador, "pago10.xml", xml("3", "3.3", "P",
+                "<pagos:Pagos xmlns:pagos=\"http://www.sat.gob.mx/Pagos\" Version=\"1.0\"/>"),
+                "CFDI");
         verificar(validador, "nomina.xml", xml("4", "4.0", "N",
                 "<nomina:Nomina xmlns:nomina=\"http://www.sat.gob.mx/nomina12\" Version=\"1.2\"/>"),
                 "CFDI");
