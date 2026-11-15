@@ -405,7 +405,8 @@ public final class ImportacionCfdiService {
                                     + p.origen().getFileName() + " (ordinal "
                                     + p.ordinal() + ", clase " + p.documento().clase()
                                     + ", tipo " + p.documento().tipo() + ", UUID " + p.documento().uuid()
-                                    + ", ruta " + p.origen() + "): "
+                                    + ", ruta " + p.origen() + ", "
+                                    + DiagnosticoXml.describir(repositorio.resolve(p.clave())) + "): "
                                     + diagnosticarErrorProcedimiento(
                                             p.documento().tipo(), er.getMessage()),
                                     er.getSQLState(), er.getErrorCode(), er);
