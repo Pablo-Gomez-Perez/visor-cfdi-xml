@@ -30,6 +30,8 @@ import com.kathsoft.visor.app.service.clasificacion.ClasificacionCfdiService;
 import com.kathsoft.visor.app.service.importacion.HistorialImportacionesService;
 import com.kathsoft.visor.app.service.configuracion.ConfiguracionLocalService;
 import java.io.IOException;
+import com.kathsoft.visor.app.service.visor.VisorCfdiService;
+import com.kathsoft.visor.app.service.visor.DetalleCfdiService;
 import com.kathsoft.visor.app.service.periodo.PeriodosFiscalesService;
 
 /**
@@ -90,6 +92,12 @@ public final class UsuariosService {
     public TercerosService terceros() {
         return new TercerosService(jpa);
     }
+
+    /** @return visor general RF-015/016 sobre el contexto compartido */
+    public VisorCfdiService visorCfdi() {return new VisorCfdiService(jpa);}
+
+    /** @return inspección de comprobante RF-017 */
+    public DetalleCfdiService detalleCfdi() {return new DetalleCfdiService(jpa);}
 
     /** @return servicio RF-013 de historial y archivado reversible de documentos */
     public HistorialImportacionesService historialImportaciones() {
