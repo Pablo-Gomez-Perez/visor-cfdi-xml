@@ -17,6 +17,12 @@ class HistorialImportacionesServiceTest {
         assertThrows(NullPointerException.class,()->new Rango(null,dia));
         assertThrows(IllegalArgumentException.class,()->new Rango(LocalDate.of(999,1,1),dia));
     }
+    @Test void filtrosValidanIdentificadoresYEstado() {
+        var rango=new Rango(LocalDate.of(2026,11,15),LocalDate.of(2026,11,16));
+        assertThrows(IllegalArgumentException.class,()->new HistorialImportacionesService.Filtro(
+            rango,-1,0,HistorialImportacionesService.EstadoLote.TODOS));
+        assertThrows(NullPointerException.class,()->new HistorialImportacionesService.Filtro(rango,0,0,null));
+    }
     @Test void paginaCopiaListaYNoExponeMutacion() {
         var origen=new ArrayList<>(List.of("a"));
         var pagina=new Pagina<>(origen,true);

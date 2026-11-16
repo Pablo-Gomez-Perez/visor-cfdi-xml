@@ -17,7 +17,8 @@ class PanelHistorialImportacionesTest {
             assertInstanceOf(GroupLayout.class,panel.getLayout());
             JTable tabla=buscar(panel);
             assertNotNull(tabla);
-            assertEquals(11,tabla.getColumnCount());
+            assertEquals(12,tabla.getColumnCount());
+            assertEquals("CFDI archivados",tabla.getColumnName(11));
             panel.configurar(null,null,Set.of());
             panel.recargar();
         });

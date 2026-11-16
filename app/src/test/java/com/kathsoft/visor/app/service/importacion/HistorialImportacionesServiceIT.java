@@ -7,6 +7,11 @@ import com.kathsoft.visor.app.model.dto.SolicitudUsuario;
 import com.kathsoft.visor.app.persistence.JpaContext;
 import com.kathsoft.visor.app.security.Permisos;
 import com.kathsoft.visor.app.service.importacion.HistorialImportacionesService.Rango;
+import com.kathsoft.visor.app.service.importacion.HistorialImportacionesService.Filtro;
+import com.kathsoft.visor.app.service.importacion.HistorialImportacionesService.EstadoLote;
+import com.kathsoft.visor.app.model.dto.FiltroClasificacionFiscal;
+import com.kathsoft.visor.app.model.dto.FiltroPeriodoFiscal;
+import com.kathsoft.visor.app.service.clasificacion.ClasificadorDocumentoFiscal.Categoria;
 import com.kathsoft.visor.app.service.usuario.UsuariosService;
 import jakarta.persistence.EntityManager;
 import java.nio.file.Files;
@@ -39,7 +44,7 @@ class HistorialImportacionesServiceIT {
         .withCopyFileToContainer(MountableFile.forHostPath(db("procedures/procedures.sql")),
                 "/docker-entrypoint-initdb.d/02-procedures.sql");
 
-    @Test void consultaAislamientoBorradoSeguroAuditoriaYReimportacion() throws Exception {
+    @Test void consultaAislamientoArchivoReversibleYConservacionHistorica() throws Exception {
         Path repo=temporal.resolve("repo");
         var config=new ConfiguracionSistema(MYSQL.getHost(),MYSQL.getMappedPort(3306),
                 MYSQL.getDatabaseName(),MYSQL.getUsername(),repo);
@@ -52,7 +57,8 @@ class HistorialImportacionesServiceIT {
             long actor=admin.id();
             assertTrue(usuarios.permisosDe(actor).containsAll(Set.of(
                     Permisos.IMPORTACIONES_CONSULTAR,Permisos.IMPORTACIONES_CONSULTAR_DETALLE,
-                    Permisos.IMPORTACIONES_ELIMINAR_LOTE,Permisos.IMPORTACIONES_ELIMINAR_ARCHIVO)));
+                    Permisos.IMPORTACIONES_ARCHIVAR_LOTE,Permisos.IMPORTACIONES_ARCHIVAR_CFDI,
+                     Permisos.IMPORTACIONES_RESTAURAR_CFDI)));
             long a=usuarios.contribuyentes().registrar(actor,
                     new SolicitudContribuyente("BBB010101BBB","Titular A",null,null));
             long b=usuarios.contribuyentes().registrar(actor,
@@ -111,62 +117,82 @@ class HistorialImportacionesServiceIT {
             conceder(jpa,"CONSULTAR_DETALLE");
             assertEquals(1,historial.archivos(lector,otro,0).filas().size());
             assertThrows(SecurityException.class,()->historial.archivos(lector,lote,0));
-            assertThrows(SecurityException.class,()->historial.eliminarLote(lector,otro,"Sin privilegio"));
-            conceder(jpa,"ELIMINAR_LOTE");
-            assertThrows(SecurityException.class,()->historial.eliminarLote(lector,lote,"Fuera de titular"));
-            assertThrows(IllegalStateException.class,()->historial.eliminarLote(actor,abierto,"En proceso"));
-            assertThrows(IllegalArgumentException.class,()->historial.eliminarArchivo(actor,lote,
+            assertThrows(SecurityException.class,()->historial.archivarLote(lector,otro,"Sin privilegio"));
+            assertThrows(SecurityException.class,()->historial.archivarArchivo(lector,otro,
+                    historial.archivos(lector,otro,0).filas().get(0).id(),"Sin privilegio"));
+            conceder(jpa,"ARCHIVAR_LOTE");
+            assertThrows(SecurityException.class,()->historial.archivarLote(lector,lote,"Fuera de titular"));
+            assertThrows(IllegalStateException.class,()->historial.archivarLote(actor,abierto,"En proceso"));
+            assertThrows(IllegalArgumentException.class,()->historial.archivarArchivo(actor,lote,
                     historial.archivos(actor,otro,0).filas().get(0).id(),"Archivo ajeno"));
-            assertThrows(IllegalArgumentException.class,()->historial.eliminarLote(actor,lote," "));
+            assertThrows(IllegalArgumentException.class,()->historial.archivarLote(actor,lote," "));
+            assertThrows(IllegalArgumentException.class,()->historial.archivarArchivo(actor,lote,detalles.get(2).id(),"Sin documento"));
+            assertEquals(1,historial.opciones(lector).contribuyentes().size());
+            assertEquals(b,historial.opciones(lector).contribuyentes().get(0).id());
+            assertEquals(1,historial.listar(actor,new Filtro(ambosDias,b,actor,EstadoLote.FINALIZADO),0).filas().size());
+            assertEquals(1,historial.listar(actor,new Filtro(ambosDias,a,actor,EstadoLote.PARCIAL),0).filas().size());
+            assertTrue(historial.listar(lector,new Filtro(ambosDias,a,actor,EstadoLote.TODOS),0).filas().isEmpty());
+            assertTrue(historial.listar(actor,new Filtro(ambosDias,b,lector,EstadoLote.TODOS),0).filas().isEmpty());
 
-            // Una obligación administrativa protege el documento y revierte el lote entero.
-            long docProtegido=detalles.get(3).documentoId();
-            jpa.enTransaccion(em->{
-                em.createNativeQuery("INSERT INTO obligacion(contribuyente_id,documento_id,naturaleza,moneda,monto_original,fecha_origen)"
-                        +" VALUES (?1,?2,'PAGAR','MXN',50,'2020-03-05')")
-                        .setParameter(1,a).setParameter(2,docProtegido).executeUpdate();
-                return null;
-            });
-            assertThrows(IllegalStateException.class,()->historial.eliminarLote(actor,lote,"Bloqueado"));
-            assertEquals(4,historial.archivos(actor,lote,0).filas().size());
+            var seleccionado=detalles.get(1);
+            long archivoB=historial.archivos(actor,otro,0).filas().get(0).id();
+            assertTrue(historial.archivarArchivo(actor,lote,seleccionado.id(),"Archivar compartido"));
+            assertFalse(historial.archivarArchivo(actor,lote,seleccionado.id(),"Ya archivado"));
+            assertEquals("ARCHIVADO",historial.archivos(actor,lote,0).filas().get(1).estadoOperativo());
+            assertEquals("ARCHIVADO",historial.archivos(actor,repetido,0).filas().get(0).estadoOperativo());
+            assertEquals("ACTIVO",historial.archivos(actor,otro,0).filas().get(0).estadoOperativo());
+            var filtro=new FiltroClasificacionFiscal(Categoria.TODAS,FiltroClasificacionFiscal.Sentido.TODOS,seleccionado.uuid());
+            var periodo=FiltroPeriodoFiscal.ejercicio(2020,FiltroPeriodoFiscal.TipoFechaFiscal.EMISION);
+            assertEquals(0,usuarios.clasificaciones().consultar(actor,a,filtro,0).documentos().size());
+            assertEquals(1,usuarios.clasificaciones().consultar(actor,b,filtro,0).documentos().size());
+            assertEquals(2,usuarios.periodosFiscales().consultar(actor,a,periodo,0).size());
+            assertEquals(1,usuarios.periodosFiscales().consultar(actor,b,periodo,0).size());
+            assertEquals(3,historial.listar(actor,rango,0).filas().get(0).aceptados());
+            assertEquals(1,historial.listar(actor,rango,0).filas().get(0).archivados());
+            assertThrows(SecurityException.class,()->historial.restaurarArchivo(lector,otro,archivoB,"Sin permiso"));
+            assertThrows(SecurityException.class,()->historial.restaurarArchivo(lector,lote,seleccionado.id(),"Fuera de titular"));
+
+            // El mismo XML sigue siendo duplicado y no reactiva un vínculo archivado.
+            long nuevo=importar(importador,actor,a,List.of(compartido));
+            assertEquals("DUPLICADO",historial.archivos(actor,nuevo,0).filas().get(0).resultado());
+            assertEquals("ARCHIVADO",historial.archivos(actor,nuevo,0).filas().get(0).estadoOperativo());
+            Path conflicto=temporal.resolve("conflicto.xml");
+            Files.writeString(conflicto,Files.readString(compartido)+"\n");
+            assertThrows(RuntimeException.class,()->importar(importador,actor,a,List.of(conflicto)));
             assertEquals(3L,jpa.<Long>consultar(em->numero(em,"SELECT COUNT(*) FROM documento_fiscal")));
-            assertEquals(0L,jpa.<Long>consultar(em->numero(em,"SELECT COUNT(*) FROM bitacora_evento WHERE accion='ELIMINAR_REGISTRO'")));
-            jpa.enTransaccion(em->{em.createNativeQuery("DELETE FROM obligacion WHERE documento_id=?1")
-                    .setParameter(1,docProtegido).executeUpdate();return null;});
 
-            // El borrado individual de un duplicado preserva el documento global y su historial restante.
-            var archivoRepetido=historial.archivos(actor,repetido,0).filas().get(0);
-            var rdup=historial.eliminarArchivo(actor,repetido,archivoRepetido.id(),"Duplicado operativo");
-            assertEquals(1,rdup.registros());
-            assertEquals(0,rdup.documentosEliminados());
-            assertEquals(1,rdup.documentosPreservados());
-            // Borrado individual exclusivo: elimina las tablas hijas de Pagos 1.0.
-            var r1=historial.eliminarArchivo(actor,lote,detalles.get(0).id(),"Importación equivocada");
-            assertEquals(1,r1.registros());
-            assertEquals(1,r1.documentosEliminados());
-            assertEquals(0,r1.documentosPreservados());
-            assertEquals(0L,jpa.<Long>consultar(em->numero(em,"SELECT COUNT(*) FROM pago_fiscal_grupo_impuesto10")));
-            assertEquals(3L,jpa.<Long>consultar(em->numero(em,"SELECT COUNT(*) FROM archivo_documental")));
-            try(var archivos=Files.walk(repo)) { assertEquals(3,archivos.filter(p->p.toString().endsWith(".xml")).count()); }
+            // Restauración usa el repositorio, aunque ya no exista el origen externo.
+            String sha=seleccionado.sha256().toLowerCase(java.util.Locale.ROOT);
+            Path original=repo.resolve("cfdi").resolve(sha.substring(0,2)).resolve(sha+".xml");
+            byte[] originalBytes=Files.readAllBytes(original);
+            Files.delete(compartido);
+            byte[] alterado=originalBytes.clone(); alterado[0]^=1;
+            Files.write(original,alterado);
+            assertThrows(IllegalStateException.class,()->historial.restaurarArchivo(actor,lote,seleccionado.id(),"Original alterado"));
+            assertEquals("ARCHIVADO",historial.archivos(actor,lote,0).filas().get(1).estadoOperativo());
+            Files.write(original,originalBytes);
+            assertTrue(historial.restaurarArchivo(actor,lote,seleccionado.id(),"Original verificado"));
+            assertEquals(1,usuarios.clasificaciones().consultar(actor,a,filtro,0).documentos().size());
+            assertFalse(historial.restaurarArchivo(actor,lote,seleccionado.id(),"Ya activo"));
 
-            var borrado=historial.eliminarLote(actor,lote,"Revertir carga del lote");
-            assertEquals(3,borrado.registros());
-            assertEquals(1,borrado.documentosEliminados());
-            assertEquals(1,borrado.documentosPreservados());
-            assertThrows(SecurityException.class,()->historial.archivos(actor,lote,0));
-            assertEquals(1,historial.archivos(actor,otro,0).filas().size());
+            assertEquals(3,historial.archivarLote(actor,lote,"Archivar todos los CFDI"));
+            assertEquals(0,historial.archivarLote(actor,lote,"Operación idempotente"));
+            assertEquals(0,usuarios.periodosFiscales().consultar(actor,a,periodo,0).size());
+            assertEquals(1,usuarios.periodosFiscales().consultar(actor,b,periodo,0).size());
+            assertEquals(4,historial.archivos(actor,lote,0).filas().size());
+            assertEquals(3,historial.listar(actor,rango,0).filas().get(0).aceptados());
+            assertEquals(3,historial.listar(actor,rango,0).filas().get(0).archivados());
+            assertEquals(1,historial.listar(actor,rango,0).filas().get(0).rechazados());
             jpa.consultar(em->{
-                assertEquals(1L,numero(em,"SELECT COUNT(*) FROM documento_fiscal"));
-                assertEquals(2L,numero(em,"SELECT COUNT(*) FROM contribuyente_documento"));
+                assertEquals(3L,numero(em,"SELECT COUNT(*) FROM documento_fiscal"));
+                assertEquals(4L,numero(em,"SELECT COUNT(*) FROM contribuyente_documento"));
                 assertEquals(3L,numero(em,"SELECT COUNT(*) FROM archivo_documental"));
-                assertEquals(5L,numero(em,"SELECT COUNT(*) FROM bitacora_cambio WHERE atributo='registro_importacion'"));
-                assertEquals(1L,numero(em,"SELECT COUNT(*) FROM bitacora_cambio WHERE atributo='lote_importacion'"));
+                assertEquals(4L,numero(em,"SELECT COUNT(*) FROM bitacora_evento WHERE accion='ARCHIVAR'"));
+                assertEquals(1L,numero(em,"SELECT COUNT(*) FROM bitacora_evento WHERE accion='RESTAURAR'"));
                 return null;
             });
-            // El mismo SHA original puede reimportarse sin duplicar el archivo documental.
-            long nuevo=importar(importador,actor,a,List.of(exclusivo));
-            assertEquals("ACEPTADO",historial.archivos(actor,nuevo,0).filas().get(0).resultado());
-            assertEquals(3L,jpa.<Long>consultar(em->numero(em,"SELECT COUNT(*) FROM archivo_documental")));
+            assertTrue(historial.restaurarArchivo(actor,lote,seleccionado.id(),"Restaurar desde historial"));
+            assertEquals(1,usuarios.periodosFiscales().consultar(actor,a,periodo,0).size());
         }
     }
 
