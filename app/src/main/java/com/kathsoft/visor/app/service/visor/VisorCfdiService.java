@@ -43,11 +43,11 @@ public final class VisorCfdiService {
         TRASLADOS("Traslados","traslados"), RETENCIONES("Retenciones","retenciones"),
         TOTAL("Total CFDI","total"), MONEDA("Moneda","moneda"), METODO("Método","metodo"),
         FORMA("Forma","forma"), SAT("Último estado SAT","estado_sat"),
-        FECHA_SAT("Consulta SAT","fecha_sat"), PAGO("Estado obligación","estado_pago"),
+        FECHA_SAT("Consulta SAT","fecha_sat"), PAGO("Estado pago registrado","estado_pago"),
         VERSION("Versión","version_estandar"), CLAVE_RETENCION("Clave retención","clave_retencion"),
         MONTO_RETENCION("Monto operación ret.","monto_retencion"),
         RETENIDO_RETENCION("Monto retenido ret.","retenido_retencion"),
-        TOTAL_REP("Total Pagos 2.0 (MXN)","total_rep");
+        TOTAL_REP("Total Pagos 2.0 (MXN)","total_rep"), IVA16("IVA traslado 16%","iva16"), IEPS3("IEPS traslado 3%","ieps3");
         private final String etiqueta,sql;
         Columna(String etiqueta,String sql){this.etiqueta=etiqueta;this.sql=sql;}
         @Override public String toString(){return etiqueta;}
@@ -72,7 +72,7 @@ public final class VisorCfdiService {
             tipo=opcion(tipo,"I","E","T","N","P","RETENCION");
             sentido=opcion(sentido,"EMITIDO","RECIBIDO","AMBOS");
             sat=opcion(sat,"VIGENTE","CANCELADO","NO_ENCONTRADO","DESCONOCIDO","ERROR","SIN_CONSULTA");
-            pago=opcion(pago,"SIN_REGISTRO","LIQUIDADO","PENDIENTE","PARCIAL","SOBREAPLICADO","MIXTO");
+            pago=opcion(pago,"REP_SIN_CONCILIAR","SIN_REGISTRO","LIQUIDADO","PENDIENTE","PARCIAL","SOBREAPLICADO","MIXTO");
             metodo=opcion(metodo,"PUE","PPD","PIP");
             moneda=limpiar(moneda,3).toUpperCase(Locale.ROOT);
             if(!moneda.isEmpty()&&!moneda.matches("[A-Z]{3}"))throw new IllegalArgumentException("Moneda inválida");
@@ -124,12 +124,18 @@ public final class VisorCfdiService {
             c.subtotal,c.descuento,it.total_trasladados AS traslados,it.total_retenidos AS retenciones,
             c.total,c.moneda,c.metodo_pago AS metodo,c.forma_pago AS forma,
             COALESCE(s.estado,'SIN_CONSULTA') AS estado_sat,s.fecha_consulta AS fecha_sat,
-            (SELECT CASE WHEN COUNT(*)=0 THEN 'SIN_REGISTRO'
+            (SELECT CASE WHEN COUNT(*)=0 THEN CASE WHEN EXISTS (SELECT 1 FROM pago_fiscal_documento pd
+                    JOIN pago_fiscal pf ON pf.id=pd.pago_fiscal_id
+                    JOIN contribuyente_documento cp ON cp.documento_id=pf.documento_id
+                        AND cp.contribuyente_id=cd.contribuyente_id AND cp.archivado_en IS NULL
+                    WHERE pd.uuid_documento=d.uuid) THEN 'REP_SIN_CONCILIAR' ELSE 'SIN_REGISTRO' END
                  WHEN COUNT(DISTINCT v.estado_calculado)=1 THEN MIN(v.estado_calculado)
                  ELSE 'MIXTO' END FROM v_saldo_obligacion v
                  WHERE v.contribuyente_id=cd.contribuyente_id AND v.documento_id=d.id) AS estado_pago,
             d.version_estandar,r.clave_retencion,rt.monto_total_operacion AS monto_retencion,
-            rt.monto_total_retenido AS retenido_retencion,pt.monto_total_pagos AS total_rep
+            rt.monto_total_retenido AS retenido_retencion,pt.monto_total_pagos AS total_rep,
+            (SELECT SUM(ig.importe) FROM cfdi_impuesto_global ig WHERE ig.documento_id=d.id AND ig.movimiento='TRASLADO' AND ig.impuesto='002' AND ig.tipo_factor='Tasa' AND ig.tasa_cuota=0.160000) AS iva16,
+            (SELECT SUM(ig.importe) FROM cfdi_impuesto_global ig WHERE ig.documento_id=d.id AND ig.movimiento='TRASLADO' AND ig.impuesto='003' AND ig.tipo_factor='Tasa' AND ig.tasa_cuota=0.030000) AS ieps3
         FROM contribuyente_documento cd JOIN documento_fiscal d ON d.id=cd.documento_id
         JOIN usuario_contribuyente uc ON uc.contribuyente_id=cd.contribuyente_id
         LEFT JOIN cfdi c ON c.documento_id=d.id
@@ -180,8 +186,8 @@ public final class VisorCfdiService {
             autorizar(em,actor,filtro.titular(),Permisos.CFDI_CONSULTAR);
             String sql="""
                 SELECT x.rfc_emisor,x.moneda,x.tipo,COUNT(*),SUM(x.subtotal),SUM(x.descuento),
-                    SUM(x.traslados),SUM(x.retenciones),SUM(x.total),SUM(x.monto_retencion),
-                    SUM(x.retenido_retencion),SUM(x.total_rep)
+                    SUM(x.traslados),SUM(x.retenciones),SUM(x.total),CASE WHEN x.moneda IS NOT NULL THEN SUM(x.monto_retencion) END,
+                    CASE WHEN x.moneda IS NOT NULL THEN SUM(x.retenido_retencion) END,SUM(x.total_rep)
                 FROM (
                 """+BASE+") x "+condiciones(filtro)
                 +" GROUP BY x.rfc_emisor,x.moneda,x.tipo ORDER BY x.rfc_emisor,x.moneda,x.tipo";

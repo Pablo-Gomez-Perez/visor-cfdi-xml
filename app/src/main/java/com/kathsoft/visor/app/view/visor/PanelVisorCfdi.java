@@ -122,7 +122,7 @@ public class PanelVisorCfdi extends JPanel {
         lblMin=new JLabel("Mín.");txfMin=new JTextField();lblMax=new JLabel("Máx.");txfMax=new JTextField();
         lblMoneda=new JLabel("Moneda");txfMoneda=new JTextField();
         lblSat=new JLabel("SAT");cmbSat=new JComboBox<>(new String[]{"","VIGENTE","CANCELADO","NO_ENCONTRADO","DESCONOCIDO","ERROR","SIN_CONSULTA"});
-        lblPago=new JLabel("Obligación");cmbPago=new JComboBox<>(new String[]{"","SIN_REGISTRO","LIQUIDADO","PENDIENTE","PARCIAL","SOBREAPLICADO","MIXTO"});
+        lblPago=new JLabel("Pago");cmbPago=new JComboBox<>(new String[]{"","SIN_REGISTRO","REP_SIN_CONCILIAR","LIQUIDADO","PENDIENTE","PARCIAL","SOBREAPLICADO","MIXTO"});
         lblMetodo=new JLabel("Método");cmbMetodo=new JComboBox<>(new String[]{"","PUE","PPD","PIP"});
         GroupLayout f=new GroupLayout(panelInferiorBusqueda);panelInferiorBusqueda.setLayout(f);
         f.setAutoCreateGaps(true);
@@ -170,6 +170,7 @@ public class PanelVisorCfdi extends JPanel {
         txfUuid.addActionListener(e->buscar());txfRfc.addActionListener(e->buscar());txfEmisor.addActionListener(e->buscar());txfReceptor.addActionListener(e->buscar());
         txfDesde.addActionListener(e->buscar());txfHasta.addActionListener(e->buscar());txfMin.addActionListener(e->buscar());txfMax.addActionListener(e->buscar());txfMoneda.addActionListener(e->buscar());
         cmbPeriodo.addActionListener(e->habilitar());
+        cmbTitular.addActionListener(e->{if(!ocupado){filas=List.of();ultimoFiltro=null;siguiente=false;modelo.setRowCount(0);pagina=0;habilitar();}});
         tabla.getSelectionModel().addListSelectionListener(e->habilitar());
         tabla.getTableHeader().addMouseListener(new MouseAdapter(){
             @Override public void mouseClicked(MouseEvent e){
@@ -189,6 +190,8 @@ public class PanelVisorCfdi extends JPanel {
         btnAnterior.setEnabled(libre&&ultimoFiltro!=null&&pagina>0);btnSiguiente.setEnabled(libre&&siguiente);
         btnDetalle.setEnabled(libre&&!agrupado&&ultimoFiltro!=null&&tabla.getSelectedRow()>=0&&detalles!=null&&permisos.contains(Permisos.CFDI_CONSULTAR_DETALLE));
         cmbTitular.setEnabled(libre);cmbPeriodo.setEnabled(libre);
+        cmbFecha.setEnabled(libre);cmbTipo.setEnabled(libre);cmbSentido.setEnabled(libre);cmbSat.setEnabled(libre);cmbPago.setEnabled(libre);cmbMetodo.setEnabled(libre);
+        txfUuid.setEnabled(libre);txfRfc.setEnabled(libre);txfEmisor.setEnabled(libre);txfReceptor.setEnabled(libre);txfMin.setEnabled(libre);txfMax.setEnabled(libre);txfMoneda.setEnabled(libre);
         spEjercicio.setEnabled(libre&&cmbPeriodo.getSelectedIndex()!=2);spMes.setEnabled(libre&&cmbPeriodo.getSelectedIndex()==0);
         txfDesde.setEnabled(libre&&cmbPeriodo.getSelectedIndex()==2);txfHasta.setEnabled(libre&&cmbPeriodo.getSelectedIndex()==2);
     }
