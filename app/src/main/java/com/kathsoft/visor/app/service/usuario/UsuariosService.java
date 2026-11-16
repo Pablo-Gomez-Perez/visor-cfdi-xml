@@ -27,6 +27,7 @@ import com.kathsoft.visor.app.service.tercero.TercerosService;
 import com.kathsoft.visor.app.service.importacion.ImportacionCfdiService;
 import com.kathsoft.visor.app.service.validacion.ValidacionTecnicaService;
 import com.kathsoft.visor.app.service.clasificacion.ClasificacionCfdiService;
+import com.kathsoft.visor.app.service.importacion.HistorialImportacionesService;
 import com.kathsoft.visor.app.service.configuracion.ConfiguracionLocalService;
 import java.io.IOException;
 import com.kathsoft.visor.app.service.periodo.PeriodosFiscalesService;
@@ -88,6 +89,11 @@ public final class UsuariosService {
     /** @return servicio RF-005 con el mismo contexto transaccional */
     public TercerosService terceros() {
         return new TercerosService(jpa);
+    }
+
+    /** @return servicio RF-013 de historial y eliminación controlada de importaciones */
+    public HistorialImportacionesService historialImportaciones() {
+        return new HistorialImportacionesService(jpa);
     }
 
     /** @return servicio RF-009 de clasificación de documentos fiscales importados */
