@@ -36,6 +36,7 @@ public final class Permisos {
     public static final String CFDI_CONSULTAR_CLASIFICACION = "CFDI.CONSULTAR_CLASIFICACION";
 
     public static final String IMPORTACIONES_CONSULTAR = "IMPORTACIONES.CONSULTAR";
+    public static final String IMPORTACIONES_CONSULTAR_DETALLE = "IMPORTACIONES.CONSULTAR_DETALLE";
     public static final String IMPORTACIONES_ELIMINAR_LOTE = "IMPORTACIONES.ELIMINAR_LOTE";
     public static final String IMPORTACIONES_ELIMINAR_ARCHIVO = "IMPORTACIONES.ELIMINAR_ARCHIVO";
 
@@ -74,7 +75,8 @@ public final class Permisos {
         new DefinicionPermiso("CFDI", "IMPORTAR", "Importar CFDI XML para contribuyentes asignados"),
         new DefinicionPermiso("CFDI", "VALIDAR_TECNICAMENTE", "Verificar XML y esquemas XSD SAT"),
         new DefinicionPermiso("CFDI", "CONSULTAR_CLASIFICACION", "Consultar clasificación fiscal de CFDI y retenciones"),
-        new DefinicionPermiso("IMPORTACIONES", "CONSULTAR", "Consultar lotes e historial de archivos"),
+        new DefinicionPermiso("IMPORTACIONES", "CONSULTAR", "Consultar lotes y contadores de importación"),
+        new DefinicionPermiso("IMPORTACIONES", "CONSULTAR_DETALLE", "Consultar archivos, UUID, rutas y diagnóstico de un lote"),
         new DefinicionPermiso("IMPORTACIONES", "ELIMINAR_LOTE", "Eliminar registros de un lote cerrado y documentos exclusivos"),
         new DefinicionPermiso("IMPORTACIONES", "ELIMINAR_ARCHIVO", "Eliminar un registro y su documento exclusivo"),
         new DefinicionPermiso("PERIODOS_FISCALES", "CONSULTAR", "Consultar documentos por ejercicio, mes y fecha"),

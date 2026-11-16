@@ -198,7 +198,7 @@ public class PanelHistorialImportaciones extends JPanel {
 
     private void detalle() {
         Lote lote=seleccionado();
-        if(!autorizado() || ocupado || lote==null) return;
+        if(!autorizado() || ocupado || lote==null || !permisos.contains(Permisos.IMPORTACIONES_CONSULTAR_DETALLE)) return;
         Fr_DatosLoteImportacion dialogo=new Fr_DatosLoteImportacion();
         dialogo.configurar(servicio,sesion,permisos,lote);
         dialogo.setLocationRelativeTo(this);
@@ -250,7 +250,7 @@ public class PanelHistorialImportaciones extends JPanel {
         Lote l=seleccionado();
         txfDesde.setEnabled(libre); txfHasta.setEnabled(libre);
         btnConsultar.setEnabled(libre);
-        btnDetalle.setEnabled(libre && l!=null);
+        btnDetalle.setEnabled(libre && l!=null && permisos.contains(Permisos.IMPORTACIONES_CONSULTAR_DETALLE));
         btnEliminar.setEnabled(libre && l!=null && l.fin()!=null && !"EN_PROCESO".equals(l.estado())
                 && permisos.contains(Permisos.IMPORTACIONES_ELIMINAR_LOTE));
         btnAnterior.setEnabled(libre && pagina>0);

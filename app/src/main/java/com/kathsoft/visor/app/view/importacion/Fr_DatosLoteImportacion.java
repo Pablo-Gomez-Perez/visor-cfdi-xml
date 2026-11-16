@@ -113,7 +113,8 @@ public class Fr_DatosLoteImportacion extends JDialog {
 
     private boolean autorizado() {
         return lote!=null && sesion!=null && servicio!=null
-                && permisos.contains(Permisos.IMPORTACIONES_CONSULTAR);
+                && permisos.contains(Permisos.IMPORTACIONES_CONSULTAR)
+                && permisos.contains(Permisos.IMPORTACIONES_CONSULTAR_DETALLE);
     }
 
     private void cargar(int destino) {

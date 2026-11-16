@@ -58,7 +58,7 @@ public final class HistorialImportacionesService {
         Objects.requireNonNull(rango);
         return jpa.consultar(em -> {
             AutorizacionService.exigir(em, usuario, Permisos.IMPORTACIONES_CONSULTAR);
-            // Primero paginar lotes; la agregación se hace únicamente sobre esa página.
+            // Resultados acotados, orden estable y contadores sobre el índice lote/ordinal.
             List<Object[]> filas = filas(em.createNativeQuery("""
                 SELECT l.id,l.contribuyente_id,c.rfc,c.nombre_razon_social,u.login,
                   l.inicio,l.fin,l.estado,
@@ -87,6 +87,7 @@ public final class HistorialImportacionesService {
         int offset = desplazamiento(pagina);
         return jpa.consultar(em -> {
             AutorizacionService.exigir(em, usuario, Permisos.IMPORTACIONES_CONSULTAR);
+            AutorizacionService.exigir(em, usuario, Permisos.IMPORTACIONES_CONSULTAR_DETALLE);
             loteAutorizado(em, usuario, lote, false);
             List<Object[]> filas = filas(em.createNativeQuery("""
                     SELECT a.id,a.ordinal,a.nombre_archivo,a.ruta_origen,HEX(a.sha256),
@@ -123,6 +124,7 @@ public final class HistorialImportacionesService {
         return jpa.enTransaccion(em -> {
             AutorizacionService.exigir(em,usuario,Permisos.IMPORTACIONES_CONSULTAR);
             AutorizacionService.exigir(em,usuario,permiso);
+            if (archivo!=null) AutorizacionService.exigir(em,usuario,Permisos.IMPORTACIONES_CONSULTAR_DETALLE);
             Object[] titular=loteAutorizado(em,usuario,lote,true);
             long contribuyente=numero(titular[0]);
             if ("EN_PROCESO".equals(texto(titular[1])) || titular[2]==null)
@@ -179,8 +181,8 @@ public final class HistorialImportacionesService {
                     WHERE NOT EXISTS (SELECT 1 FROM bitacora_cambio bc WHERE bc.evento_id=e.id AND bc.atributo='registro_importacion')
                     AND """+" "+alcance,lote,archivo).executeUpdate();
             int registros=seleccion(em,"DELETE a FROM importacion_archivo a WHERE "+alcance,lote,archivo).executeUpdate();
-            for (long doc:eliminables) {
-                borrarDocumento(em,doc);
+            for (int i=0;i<eliminables.size();i+=250) {
+                borrarDocumentos(em,eliminables.subList(i,Math.min(i+250,eliminables.size())));
             }
             em.createNativeQuery("""
                     INSERT INTO bitacora_evento(usuario_id,contribuyente_id,entidad,entidad_id,accion,motivo)
@@ -226,7 +228,7 @@ public final class HistorialImportacionesService {
             throw new IllegalStateException("CFDI "+uuid+" está referenciado por otro documento; elimine primero la relación de forma controlada");
     }
 
-    private static void borrarDocumento(EntityManager em,long doc) {
+    private static void borrarDocumentos(EntityManager em,List<Long> docs) {
         // Lista positiva de tablas derivadas del XML; nunca desactivar FK.
         // Una FK nueva/desconocida provoca rollback de toda la operación.
         String[] porHijo={
@@ -242,7 +244,7 @@ public final class HistorialImportacionesService {
             "DELETE g FROM pago_fiscal_grupo_impuesto10 g JOIN pago_fiscal p ON p.id=g.pago_fiscal_id WHERE p.documento_id=?1",
             "DELETE pd FROM pago_fiscal_documento pd JOIN pago_fiscal p ON p.id=pd.pago_fiscal_id WHERE p.documento_id=?1"
         };
-        for (String sql:porHijo) em.createNativeQuery(sql).setParameter(1,doc).executeUpdate();
+        for (String sql:porHijo) borrarGrupo(em,sql,docs);
         String[] porDocumento={"cfdi_concepto","cfdi_impuesto_global","cfdi_impuesto_totales",
             "cfdi_informacion_global","cfdi_relacion_grupo","nomina_deduccion","nomina_emisor",
             "nomina_incapacidad","nomina_otro_pago","nomina_percepcion","nomina_receptor","nomina",
@@ -252,8 +254,14 @@ public final class HistorialImportacionesService {
             "documento_verificacion","documento_complemento","documento_participante","documento_timbre",
             "documento_archivo","contribuyente_documento","cfdi"};
         for (String tabla:porDocumento)
-            em.createNativeQuery("DELETE FROM "+tabla+" WHERE documento_id=?1").setParameter(1,doc).executeUpdate();
-        em.createNativeQuery("DELETE FROM documento_fiscal WHERE id=?1").setParameter(1,doc).executeUpdate();
+            borrarGrupo(em,"DELETE FROM "+tabla+" WHERE documento_id=?1",docs);
+        borrarGrupo(em,"DELETE FROM documento_fiscal WHERE id=?1",docs);
+    }
+
+    private static void borrarGrupo(EntityManager em,String sql,List<Long> docs) {
+        em.createNativeQuery(sql.replace("=?1"," IN (:documentos)"))
+                .unwrap(org.hibernate.query.NativeQuery.class)
+                .setParameterList("documentos",docs).executeUpdate();
     }
 
     private static Object[] loteAutorizado(EntityManager em,Long usuario,long lote,boolean bloquear) {
