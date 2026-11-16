@@ -159,3 +159,6 @@ casillas, sin utilizar componentes opacos al diseñador.
 
 La construcción en WindowBuilder no debe realizar persistencia y debe
 adaptarse al área útil de un solo monitor de aproximadamente 900×700.
+
+## RF-015/016/017 — Visor documental
+Administrar XML abre `PanelVisorCfdi` en CardLayout; un único `Fr_DatosCfdi` modal muestra secciones y XML original. Las cabeceras de tabla ordenan en servidor, no localmente. Filtros inferiores con consulta explícita y selección de titular. Constructores vacíos, GroupLayout y SwingWorker. Ver [RF-015-017](RF-015-017.md).

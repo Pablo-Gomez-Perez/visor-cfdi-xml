@@ -150,3 +150,6 @@ Ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) y [docs/RF-002.md](docs/RF-002.
 - RF-006/RF-009 excluyen archivados. Cinco permisos granulares en RF-003.
 - Instalaciones existentes: aplicar una vez `app/database/migrations/20261116_rf013_archivado.sql` antes de arrancar.
 - [Documentación RF-013](docs/RF-013.md).
+
+### RF-015/016/017 — Administrar XML
+Visor documental independiente, filtros avanzados, orden SQL, agrupación por emisor y detalle de XML íntegro. Excluye archivados y respeta permisos por titular. Sin migración adicional. Ver [documentación](docs/RF-015-017.md).
