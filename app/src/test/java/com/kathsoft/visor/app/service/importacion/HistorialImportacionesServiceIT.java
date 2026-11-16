@@ -39,6 +39,7 @@ class HistorialImportacionesServiceIT {
 
     @Container static final MySQLContainer<?> MYSQL=new MySQLContainer<>("mysql:8.0.46")
         .withDatabaseName("visor_cfdi").withUsername("visor_it").withPassword("Prueba#Rf013")
+        .withLogConsumer(frame -> System.err.print(frame.getUtf8String()))
         .withCopyFileToContainer(MountableFile.forHostPath(db("schema/visor_cfdi_mysql8_schema_v1.sql")),
                 "/docker-entrypoint-initdb.d/01-schema.sql")
         .withCopyFileToContainer(MountableFile.forHostPath(db("procedures/procedures.sql")),
