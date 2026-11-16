@@ -16,7 +16,6 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.ResolverStyle;
 import java.text.ParseException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -61,7 +60,8 @@ public class PanelVisorCfdi extends JPanel {
     public void configurar(VisorCfdiService servicio,DetalleCfdiService detalles,UsuarioSesion sesion,Set<String> permisos){
         this.servicio=servicio;this.detalles=detalles;this.sesion=sesion;
         this.permisos=permisos==null?Set.of():Set.copyOf(permisos);
-        generacion++;ocupado=false;filas=List.of();ultimoFiltro=null;siguiente=false;
+        generacion++;ocupado=false;filas=List.of();ultimoFiltro=null;siguiente=false;agrupado=false;pagina=0;
+        btnAgrupar.setText("Agrupar por RFC");modelo.setColumnIdentifiers(Columna.values());
         modelo.setRowCount(0);cmbTitular.removeAllItems();lblEstado.setText("Seleccione contribuyente");
         habilitar();
     }
@@ -164,7 +164,7 @@ public class PanelVisorCfdi extends JPanel {
         g.setVerticalGroup(g.createSequentialGroup().addComponent(panelEtiquetaVisorCfdi,GroupLayout.PREFERRED_SIZE,GroupLayout.DEFAULT_SIZE,GroupLayout.PREFERRED_SIZE)
             .addComponent(panelCentralContenedor,0,420,Short.MAX_VALUE));
         btnBuscar.addActionListener(e->buscar());btnDetalle.addActionListener(e->detalle());
-        btnAgrupar.addActionListener(e->{agrupado=!agrupado;btnAgrupar.setText(agrupado?"Ver documentos":"Agrupar por RFC");buscar();});
+        btnAgrupar.addActionListener(e->{agrupado=!agrupado;btnAgrupar.setText(agrupado?"Ver documentos":"Agrupar por RFC");cargar(ultimoFiltro,0);});
         btnAnterior.addActionListener(e->{if(pagina>0)cargar(ultimoFiltro,pagina-1);});
         btnSiguiente.addActionListener(e->{if(siguiente)cargar(ultimoFiltro,pagina+1);});
         txfUuid.addActionListener(e->buscar());txfRfc.addActionListener(e->buscar());txfEmisor.addActionListener(e->buscar());txfReceptor.addActionListener(e->buscar());
@@ -174,7 +174,7 @@ public class PanelVisorCfdi extends JPanel {
         tabla.getTableHeader().addMouseListener(new MouseAdapter(){
             @Override public void mouseClicked(MouseEvent e){
                 if(agrupado||ocupado||ultimoFiltro==null||!autorizado())return;
-                int vista=tabla.columnAtPoint(e.getPoint());if(vista<0)return;
+                int vista=tabla.getTableHeader().columnAtPoint(e.getPoint());if(vista<0)return;
                 Columna col=Columna.values()[tabla.convertColumnIndexToModel(vista)];
                 orden=new Orden(col,orden.columna()!=col||!orden.ascendente());cargar(ultimoFiltro,0);
             }
@@ -185,7 +185,7 @@ public class PanelVisorCfdi extends JPanel {
     private boolean autorizado(){return servicio!=null&&sesion!=null&&permisos.contains(Permisos.CFDI_CONSULTAR);}
     private void habilitar(){
         boolean libre=autorizado()&&!ocupado;
-        btnBuscar.setEnabled(libre&&cmbTitular.getSelectedItem()!=null);btnAgrupar.setEnabled(btnBuscar.isEnabled());
+        btnBuscar.setEnabled(libre&&cmbTitular.getSelectedItem()!=null);btnAgrupar.setEnabled(libre&&ultimoFiltro!=null);
         btnAnterior.setEnabled(libre&&ultimoFiltro!=null&&pagina>0);btnSiguiente.setEnabled(libre&&siguiente);
         btnDetalle.setEnabled(libre&&!agrupado&&ultimoFiltro!=null&&tabla.getSelectedRow()>=0&&detalles!=null&&permisos.contains(Permisos.CFDI_CONSULTAR_DETALLE));
         cmbTitular.setEnabled(libre);cmbPeriodo.setEnabled(libre);

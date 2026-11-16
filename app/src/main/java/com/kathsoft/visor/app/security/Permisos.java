@@ -31,6 +31,9 @@ public final class Permisos {
     public static final String TERCEROS_MODIFICAR = "TERCEROS.MODIFICAR";
     public static final String TERCEROS_ASIGNAR_ROLES = "TERCEROS.ASIGNAR_ROLES";
 
+    public static final String CFDI_CONSULTAR = "CFDI.CONSULTAR";
+    public static final String CFDI_CONSULTAR_DETALLE = "CFDI.CONSULTAR_DETALLE";
+
     public static final String CFDI_IMPORTAR = "CFDI.IMPORTAR";
     public static final String CFDI_VALIDAR_TECNICAMENTE = "CFDI.VALIDAR_TECNICAMENTE";
     public static final String CFDI_CONSULTAR_CLASIFICACION = "CFDI.CONSULTAR_CLASIFICACION";
@@ -73,6 +76,8 @@ public final class Permisos {
         new DefinicionPermiso("TERCEROS", "CREAR", "Registrar contrapartes fiscales"),
         new DefinicionPermiso("TERCEROS", "MODIFICAR", "Actualizar datos de contrapartes"),
         new DefinicionPermiso("TERCEROS", "ASIGNAR_ROLES", "Asignar funciones de contraparte por contribuyente"),
+        new DefinicionPermiso("CFDI", "CONSULTAR", "Consultar, filtrar, ordenar y agrupar comprobantes activos"),
+        new DefinicionPermiso("CFDI", "CONSULTAR_DETALLE", "Consultar datos completos y XML original de comprobantes activos"),
         new DefinicionPermiso("CFDI", "IMPORTAR", "Importar CFDI XML para contribuyentes asignados"),
         new DefinicionPermiso("CFDI", "VALIDAR_TECNICAMENTE", "Verificar XML y esquemas XSD SAT"),
         new DefinicionPermiso("CFDI", "CONSULTAR_CLASIFICACION", "Consultar clasificación fiscal de CFDI y retenciones"),
