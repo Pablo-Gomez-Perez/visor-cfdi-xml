@@ -127,18 +127,18 @@ public final class HistorialImportacionesService {
             long contribuyente=numero(titular[0]);
             if ("EN_PROCESO".equals(texto(titular[1])) || titular[2]==null)
                 throw new IllegalStateException("No se puede eliminar un lote en proceso");
-            String alcance="a.lote_id=?1"+(archivo==null?" AND ?2=0":" AND a.id=?2");
+            String alcance="a.lote_id=:lote AND (:archivo=0 OR a.id=:archivo)";
             if (archivo!=null && seleccion(em,"SELECT a.id FROM importacion_archivo a WHERE "+alcance
                     +" FOR UPDATE",lote,archivo).getResultList().isEmpty())
                 throw new IllegalArgumentException("El archivo no pertenece al lote");
-            List<?> docs=seleccion(em,"SELECT DISTINCT a.documento_id FROM importacion_archivo a WHERE "
-                    +alcance+" AND a.documento_id IS NOT NULL ORDER BY a.documento_id",
+            List<?> docs=seleccion(em,"SELECT a.documento_id FROM importacion_archivo a WHERE "
+                    +alcance+" AND a.documento_id IS NOT NULL ORDER BY a.documento_id FOR UPDATE",
                     lote,archivo).getResultList();
             // RF-007 bloquea primero el lote y después documento_fiscal. Mantener ese orden.
             // Los bloqueos de documento se conservan hasta commit; cualquier fallo revierte todo.
             java.util.ArrayList<Long> eliminables=new java.util.ArrayList<>();
             long preservados=0;
-            for (Object value:docs) {
+            for (Object value:docs.stream().distinct().toList()) {
                 long doc=numero(value);
                 List<?> identidad=em.createNativeQuery("SELECT uuid FROM documento_fiscal WHERE id=?1 FOR UPDATE")
                         .setParameter(1,doc).getResultList();
@@ -161,10 +161,10 @@ public final class HistorialImportacionesService {
             // permanece como evidencia en bitacora_cambio.
             seleccion(em,"""
                     INSERT INTO bitacora_evento(usuario_id,contribuyente_id,entidad,entidad_id,accion,motivo)
-                    SELECT ?3,l.contribuyente_id,'IMPORTACION_ARCHIVO',a.id,
-                           'ELIMINAR_REGISTRO',LEFT(CONCAT('RF-013 operador=',?3,' lote=',l.id,' motivo=',?4),600)
+                    SELECT :operador,l.contribuyente_id,'IMPORTACION_ARCHIVO',a.id,
+                           'ELIMINAR_REGISTRO',LEFT(CONCAT('RF-013 operador=',:operador,' lote=',l.id,' motivo=',:motivo),600)
                     FROM importacion_archivo a JOIN lote_importacion l ON l.id=a.lote_id
-                    WHERE """+" "+alcance,lote,archivo).setParameter(3,usuario).setParameter(4,razon).executeUpdate();
+                    WHERE """+" "+alcance,lote,archivo).setParameter("operador",usuario).setParameter("motivo",razon).executeUpdate();
             seleccion(em,"""
                     INSERT INTO bitacora_cambio(evento_id,atributo,valor_anterior,valor_nuevo)
                     SELECT e.id,'registro_importacion',
@@ -182,9 +182,6 @@ public final class HistorialImportacionesService {
             for (long doc:eliminables) {
                 borrarDocumento(em,doc);
             }
-            if (archivo==null) {
-                em.createNativeQuery("DELETE FROM lote_importacion WHERE id=?1").setParameter(1,lote).executeUpdate();
-            }
             em.createNativeQuery("""
                     INSERT INTO bitacora_evento(usuario_id,contribuyente_id,entidad,entidad_id,accion,motivo)
                     VALUES (?1,?2,'LOTE_IMPORTACION',?3,?4,?5)
@@ -192,6 +189,16 @@ public final class HistorialImportacionesService {
                     .setParameter(4,archivo==null?"ELIMINAR_LOTE":"ELIMINAR_ARCHIVO")
                     .setParameter(5,"RF-013 "+razon+"; registros="+registros+"; eliminados="+eliminables.size()
                             +"; preservados="+preservados+"; originales conservados").executeUpdate();
+            if (archivo==null) {
+                em.createNativeQuery("""
+                        INSERT INTO bitacora_cambio(evento_id,atributo,valor_anterior,valor_nuevo)
+                        SELECT LAST_INSERT_ID(),'lote_importacion',
+                           JSON_OBJECT('id',id,'contribuyente_id',contribuyente_id,'usuario_id',usuario_id,
+                           'directorio_origen',directorio_origen,'inicio',inicio,'fin',fin,'estado',estado),NULL
+                        FROM lote_importacion WHERE id=?1
+                        """).setParameter(1,lote).executeUpdate();
+                em.createNativeQuery("DELETE FROM lote_importacion WHERE id=?1").setParameter(1,lote).executeUpdate();
+            }
             return new Eliminacion(registros,eliminables.size(),preservados);
         });
     }
@@ -268,8 +275,8 @@ public final class HistorialImportacionesService {
     }
 
     private static Query seleccion(EntityManager em,String sql,long lote,Long archivo) {
-        Query q=em.createNativeQuery(sql).setParameter(1,lote);
-        q.setParameter(2,archivo==null?0L:archivo);
+        Query q=em.createNativeQuery(sql).setParameter("lote",lote);
+        q.setParameter("archivo",archivo==null?0L:archivo);
         return q;
     }
 
