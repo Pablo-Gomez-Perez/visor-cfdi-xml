@@ -59,7 +59,7 @@ class HistorialImportacionesServiceIT {
                     new SolicitudContribuyente("AAA010101AAA","Titular B",null,null));
             usuarios.registrar(actor,new SolicitudUsuario("Consulta RF013","lector13",null,"CONSULTA"),
                     "ClaveSegura#Lector-2026".toCharArray());
-            long lector=jpa.consultar(em->numero(em,"SELECT id FROM usuario WHERE login='lector13'"));
+            long lector=jpa.<Long>consultar(em->numero(em,"SELECT id FROM usuario WHERE login='lector13'"));
 
             var importador=new ImportacionCfdiService(jpa,repo);
             var historial=usuarios.historialImportaciones();
@@ -129,8 +129,8 @@ class HistorialImportacionesServiceIT {
             });
             assertThrows(IllegalStateException.class,()->historial.eliminarLote(actor,lote,"Bloqueado"));
             assertEquals(4,historial.archivos(actor,lote,0).filas().size());
-            assertEquals(3L,jpa.consultar(em->numero(em,"SELECT COUNT(*) FROM documento_fiscal")));
-            assertEquals(0L,jpa.consultar(em->numero(em,"SELECT COUNT(*) FROM bitacora_evento WHERE accion='ELIMINAR_REGISTRO'")));
+            assertEquals(3L,jpa.<Long>consultar(em->numero(em,"SELECT COUNT(*) FROM documento_fiscal")));
+            assertEquals(0L,jpa.<Long>consultar(em->numero(em,"SELECT COUNT(*) FROM bitacora_evento WHERE accion='ELIMINAR_REGISTRO'")));
             jpa.enTransaccion(em->{em.createNativeQuery("DELETE FROM obligacion WHERE documento_id=?1")
                     .setParameter(1,docProtegido).executeUpdate();return null;});
 
@@ -145,8 +145,8 @@ class HistorialImportacionesServiceIT {
             assertEquals(1,r1.registros());
             assertEquals(1,r1.documentosEliminados());
             assertEquals(0,r1.documentosPreservados());
-            assertEquals(0L,jpa.consultar(em->numero(em,"SELECT COUNT(*) FROM pago_fiscal_grupo_impuesto10")));
-            assertEquals(3L,jpa.consultar(em->numero(em,"SELECT COUNT(*) FROM archivo_documental")));
+            assertEquals(0L,jpa.<Long>consultar(em->numero(em,"SELECT COUNT(*) FROM pago_fiscal_grupo_impuesto10")));
+            assertEquals(3L,jpa.<Long>consultar(em->numero(em,"SELECT COUNT(*) FROM archivo_documental")));
             try(var archivos=Files.walk(repo)) { assertEquals(3,archivos.filter(p->p.toString().endsWith(".xml")).count()); }
 
             var borrado=historial.eliminarLote(actor,lote,"Revertir carga del lote");
@@ -166,7 +166,7 @@ class HistorialImportacionesServiceIT {
             // El mismo SHA original puede reimportarse sin duplicar el archivo documental.
             long nuevo=importar(importador,actor,a,List.of(exclusivo));
             assertEquals("ACEPTADO",historial.archivos(actor,nuevo,0).filas().get(0).resultado());
-            assertEquals(3L,jpa.consultar(em->numero(em,"SELECT COUNT(*) FROM archivo_documental")));
+            assertEquals(3L,jpa.<Long>consultar(em->numero(em,"SELECT COUNT(*) FROM archivo_documental")));
         }
     }
 
