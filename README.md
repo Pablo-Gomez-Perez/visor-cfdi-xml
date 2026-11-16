@@ -143,3 +143,10 @@ Abra el archivo Java con **Open With → WindowBuilder Editor → Design**. El c
 ## Arquitectura y decisiones
 
 Ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) y [docs/RF-002.md](docs/RF-002.md). Hibernate/JPA gestiona las operaciones ordinarias; las operaciones masivas podrán usar JDBC con procedimientos almacenados sobre la **misma conexión y transacción** que la unidad de trabajo Java.
+
+### RF-013 — Historial de importaciones y archivado reversible
+- CFDI → Historial de importaciones: filtros por fecha, contribuyente, importador y estado; detalle paginado.
+- Archivado por titular y restauración tras verificar XML y SHA-256; se preservan UUID, relaciones, XML y resultados históricos.
+- RF-006/RF-009 excluyen archivados. Cinco permisos granulares en RF-003.
+- Instalaciones existentes: aplicar una vez `app/database/migrations/20261116_rf013_archivado.sql` antes de arrancar.
+- [Documentación RF-013](docs/RF-013.md).

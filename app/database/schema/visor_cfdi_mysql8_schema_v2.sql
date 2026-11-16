@@ -48,7 +48,7 @@ CREATE TABLE `documento_fiscal` (
   KEY `idx_doc_fecha_emision` (`fecha_emision`),
   CONSTRAINT `chk_doc_clase` CHECK ((`clase` in (_utf8mb4'CFDI',_utf8mb4'RETENCION'))),
   CONSTRAINT `chk_doc_uuid` CHECK (regexp_like(`uuid`,_utf8mb4'^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$'))
-) ENGINE=InnoDB AUTO_INCREMENT=426 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=460 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- visor_cfdi.permiso definición
@@ -60,7 +60,7 @@ CREATE TABLE `permiso` (
   `descripcion` varchar(200) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_permiso_recurso_accion` (`recurso`,`accion`)
-) ENGINE=InnoDB AUTO_INCREMENT=431 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=540 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- visor_cfdi.repositorio_documental definición
@@ -74,7 +74,7 @@ CREATE TABLE `repositorio_documental` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_repositorio_nombre` (`nombre`),
   CONSTRAINT `chk_repo_proveedor` CHECK ((`proveedor` in (_utf8mb4'LOCAL',_utf8mb4'S3',_utf8mb4'DROPBOX',_utf8mb4'MEGA',_utf8mb4'OTRO')))
-) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=32 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- visor_cfdi.rol definición
@@ -85,7 +85,7 @@ CREATE TABLE `rol` (
   `descripcion` varchar(200) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_rol_clave` (`clave`)
-) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=55 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- visor_cfdi.sat_catalogo definición
@@ -170,7 +170,7 @@ CREATE TABLE `archivo_documental` (
   KEY `idx_archivo_sha256` (`sha256`),
   CONSTRAINT `fk_archivo_repositorio` FOREIGN KEY (`repositorio_id`) REFERENCES `repositorio_documental` (`id`),
   CONSTRAINT `chk_archivo_tamano` CHECK ((`tamano_bytes` > 0))
-) ENGINE=InnoDB AUTO_INCREMENT=424 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=458 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- visor_cfdi.bitacora_evento definición
@@ -191,7 +191,7 @@ CREATE TABLE `bitacora_evento` (
   KEY `fk_evento_contrib` (`contribuyente_id`),
   CONSTRAINT `fk_evento_contrib` FOREIGN KEY (`contribuyente_id`) REFERENCES `contribuyente` (`id`),
   CONSTRAINT `fk_evento_usuario` FOREIGN KEY (`usuario_id`) REFERENCES `usuario` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=443 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=480 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- visor_cfdi.categoria_operacion definición
@@ -294,7 +294,7 @@ CREATE TABLE `cfdi_concepto_impuesto` (
   CONSTRAINT `fk_cimp_concepto` FOREIGN KEY (`concepto_id`) REFERENCES `cfdi_concepto` (`id`),
   CONSTRAINT `chk_cimp_montos` CHECK (((`ordinal` > 0) and (`base` >= 0) and ((`importe` is null) or (`importe` >= 0)))),
   CONSTRAINT `chk_cimp_mov` CHECK ((`movimiento` in (_utf8mb4'TRASLADO',_utf8mb4'RETENCION')))
-) ENGINE=InnoDB AUTO_INCREMENT=1415 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1414 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- visor_cfdi.cfdi_concepto_parte definición
@@ -353,7 +353,7 @@ CREATE TABLE `cfdi_impuesto_global` (
   CONSTRAINT `fk_gimp_cfdi` FOREIGN KEY (`documento_id`) REFERENCES `cfdi` (`documento_id`),
   CONSTRAINT `chk_gimp_mov` CHECK ((`movimiento` in (_utf8mb4'TRASLADO',_utf8mb4'RETENCION'))),
   CONSTRAINT `chk_gimp_positivos` CHECK (((`ordinal` > 0) and ((`importe` is null) or (`importe` >= 0)) and ((`base` is null) or (`base` >= 0))))
-) ENGINE=InnoDB AUTO_INCREMENT=236 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=235 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- visor_cfdi.cfdi_impuesto_totales definición
@@ -477,6 +477,7 @@ CREATE TABLE `contribuyente_documento` (
   `documento_id` bigint unsigned NOT NULL,
   `sentido` varchar(10) NOT NULL,
   `primer_registro` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `archivado_en` datetime(6) DEFAULT NULL,
   PRIMARY KEY (`contribuyente_id`,`documento_id`),
   KEY `idx_cd_doc` (`documento_id`),
   CONSTRAINT `fk_cd_contrib` FOREIGN KEY (`contribuyente_id`) REFERENCES `contribuyente` (`id`),
@@ -672,7 +673,7 @@ CREATE TABLE `lote_importacion` (
   CONSTRAINT `fk_lote_contrib` FOREIGN KEY (`contribuyente_id`) REFERENCES `contribuyente` (`id`),
   CONSTRAINT `fk_lote_usuario` FOREIGN KEY (`usuario_id`) REFERENCES `usuario` (`id`),
   CONSTRAINT `chk_lote_estado` CHECK ((`estado` in (_utf8mb4'EN_PROCESO',_utf8mb4'FINALIZADO',_utf8mb4'PARCIAL',_utf8mb4'ERROR')))
-) ENGINE=InnoDB AUTO_INCREMENT=30 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=32 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- visor_cfdi.movimiento_bancario definición
@@ -1304,7 +1305,7 @@ CREATE TABLE `importacion_archivo` (
   CONSTRAINT `fk_imparch_lote` FOREIGN KEY (`lote_id`) REFERENCES `lote_importacion` (`id`),
   CONSTRAINT `fk_imparch_repo` FOREIGN KEY (`archivo_documental_id`) REFERENCES `archivo_documental` (`id`),
   CONSTRAINT `chk_imparch_resultado` CHECK ((`resultado` in (_utf8mb4'ACEPTADO',_utf8mb4'DUPLICADO',_utf8mb4'RECHAZADO',_utf8mb4'ERROR')))
-) ENGINE=InnoDB AUTO_INCREMENT=424 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=458 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- visor_cfdi.movimiento_pago_complemento definición

@@ -3,7 +3,8 @@
 -- MySQL DDL hace commit implícito; no usar --force; no ejecutar en paralelo.
 -- No elimina documentos ni sobrescribe XML existentes.
 
-USE visor_cfdi;
+-- Usar la base seleccionada por el cliente mysql (p. ej. mysql visor_cfdi).
+-- No cambiar el esquema aquí: permite probar la misma migración en una BD aislada.
 
 CREATE TABLE pago_fiscal_complemento (
   documento_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,

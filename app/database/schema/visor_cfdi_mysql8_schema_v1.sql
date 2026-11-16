@@ -477,6 +477,7 @@ CREATE TABLE `contribuyente_documento` (
   `documento_id` bigint unsigned NOT NULL,
   `sentido` varchar(10) NOT NULL,
   `primer_registro` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  `archivado_en` datetime(6) DEFAULT NULL,
   PRIMARY KEY (`contribuyente_id`,`documento_id`),
   KEY `idx_cd_doc` (`documento_id`),
   CONSTRAINT `fk_cd_contrib` FOREIGN KEY (`contribuyente_id`) REFERENCES `contribuyente` (`id`),

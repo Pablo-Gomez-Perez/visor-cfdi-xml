@@ -1,3 +1,6 @@
+-- Ejecutar como script del cliente mysql; no dividir el cuerpo de las rutinas.
+DELIMITER $$
+
 CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_cfdi`(
     IN p_lote_id BIGINT UNSIGNED,
     IN p_ordinal INT UNSIGNED,
@@ -344,7 +347,7 @@ BEGIN
     VALUES (v_usuario_id,v_contribuyente_id,'DOCUMENTO_FISCAL',v_documento_id,
             IF(p_duplicado=1,'VINCULAR','IMPORTAR'),
             CONCAT('RF-007; UUID=',v_uuid,'; lote=',p_lote_id));
-END;
+END$
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_nomina`(
  IN p_documento_id BIGINT UNSIGNED,
@@ -461,7 +464,7 @@ BEGIN
       tipo VARCHAR(5) PATH '$.tipo',
       importe DECIMAL(20,6) PATH '$.importe'
     )) AS i;
-END;
+END$
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_pago`(
  IN p_documento_id BIGINT UNSIGNED,
@@ -625,7 +628,7 @@ BEGIN
     )) AS t
    WHERE t.atributo <> 'MontoTotalPagos' AND t.atributo REGEXP '^Total';
   END IF;
-END;
+END$
 
 CREATE DEFINER=`root`@`localhost` PROCEDURE `visor_cfdi`.`sp_rf007_importar_retencion`(
     IN p_lote_id BIGINT UNSIGNED,
@@ -803,4 +806,6 @@ BEGIN
   VALUES(v_usuario,v_contribuyente,'DOCUMENTO_FISCAL',v_doc,
       IF(p_duplicado=1,'VINCULAR','IMPORTAR'),
       CONCAT('RF-007 Retenciones 2.0 UUID=',v_uuid,' lote=',p_lote_id));
-END;
+END$
+
+DELIMITER ;

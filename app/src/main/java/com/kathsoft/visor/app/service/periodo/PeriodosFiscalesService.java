@@ -82,7 +82,7 @@ public final class PeriodosFiscalesService {
                 + "LEFT JOIN cfdi c ON c.documento_id=d.id "
                 + (pago ? "JOIN pago_fiscal p ON p.documento_id=d.id "
                         : "LEFT JOIN documento_timbre t ON t.documento_id=d.id ")
-                + "WHERE cd.contribuyente_id=?1 AND " + fecha + ">=?2 AND " + fecha + "<?3 "
+                + "WHERE cd.contribuyente_id=?1 AND cd.archivado_en IS NULL AND " + fecha + ">=?2 AND " + fecha + "<?3 "
                 + "ORDER BY " + fecha + ", d.id" + (pago ? ", p.id" : "");
             Query consulta = em.createNativeQuery(sql)
                 .setParameter(1, contribuyenteId)
