@@ -182,7 +182,17 @@ public final class HistorialImportacionesService {
                     AND """+" "+alcance,lote,archivo).executeUpdate();
             int registros=seleccion(em,"DELETE a FROM importacion_archivo a WHERE "+alcance,lote,archivo).executeUpdate();
             for (int i=0;i<eliminables.size();i+=250) {
-                borrarDocumentos(em,eliminables.subList(i,Math.min(i+250,eliminables.size())));
+                List<Long> grupo=eliminables.subList(i,Math.min(i+250,eliminables.size()));
+                em.createNativeQuery("""
+                        INSERT INTO bitacora_evento(usuario_id,contribuyente_id,entidad,entidad_id,accion,motivo)
+                        SELECT :usuario,:titular,'DOCUMENTO_FISCAL',id,'ELIMINAR_DATOS',
+                               CONCAT('RF-013 UUID=',uuid,' lote=',:lote,' motivo=',:motivo)
+                        FROM documento_fiscal WHERE id IN (:documentos)
+                        """).unwrap(org.hibernate.query.NativeQuery.class)
+                        .setParameter("usuario",usuario).setParameter("titular",contribuyente)
+                        .setParameter("lote",lote).setParameter("motivo",razon)
+                        .setParameterList("documentos",grupo).executeUpdate();
+                borrarDocumentos(em,grupo);
             }
             em.createNativeQuery("""
                     INSERT INTO bitacora_evento(usuario_id,contribuyente_id,entidad,entidad_id,accion,motivo)
