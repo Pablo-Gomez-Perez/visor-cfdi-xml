@@ -110,7 +110,7 @@ public final class ClasificacionCfdiService {
                     + "ON emi.documento_id=d.id AND emi.rol='E' "
                     + "LEFT JOIN documento_participante rec "
                     + "ON rec.documento_id=d.id AND rec.rol='R' "
-                    + "WHERE cd.contribuyente_id=:contribuyente ");
+                    + "WHERE cd.contribuyente_id=:contribuyente AND cd.archivado_en IS NULL ");
 
             switch (filtro.categoria()) {
                 case TODAS -> { }

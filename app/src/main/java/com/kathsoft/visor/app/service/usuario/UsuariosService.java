@@ -91,7 +91,7 @@ public final class UsuariosService {
         return new TercerosService(jpa);
     }
 
-    /** @return servicio RF-013 de historial y eliminación controlada de importaciones */
+    /** @return servicio RF-013 de historial y archivado reversible de documentos */
     public HistorialImportacionesService historialImportaciones() {
         return new HistorialImportacionesService(jpa);
     }

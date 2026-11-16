@@ -37,8 +37,9 @@ public final class Permisos {
 
     public static final String IMPORTACIONES_CONSULTAR = "IMPORTACIONES.CONSULTAR";
     public static final String IMPORTACIONES_CONSULTAR_DETALLE = "IMPORTACIONES.CONSULTAR_DETALLE";
-    public static final String IMPORTACIONES_ELIMINAR_LOTE = "IMPORTACIONES.ELIMINAR_LOTE";
-    public static final String IMPORTACIONES_ELIMINAR_ARCHIVO = "IMPORTACIONES.ELIMINAR_ARCHIVO";
+    public static final String IMPORTACIONES_ARCHIVAR_LOTE = "IMPORTACIONES.ARCHIVAR_LOTE";
+    public static final String IMPORTACIONES_ARCHIVAR_CFDI = "IMPORTACIONES.ARCHIVAR_CFDI";
+    public static final String IMPORTACIONES_RESTAURAR_CFDI = "IMPORTACIONES.RESTAURAR_CFDI";
 
     public static final String PERIODOS_FISCALES_CONSULTAR = "PERIODOS_FISCALES.CONSULTAR";
 
@@ -77,8 +78,9 @@ public final class Permisos {
         new DefinicionPermiso("CFDI", "CONSULTAR_CLASIFICACION", "Consultar clasificación fiscal de CFDI y retenciones"),
         new DefinicionPermiso("IMPORTACIONES", "CONSULTAR", "Consultar lotes y contadores de importación"),
         new DefinicionPermiso("IMPORTACIONES", "CONSULTAR_DETALLE", "Consultar archivos, UUID, rutas y diagnóstico de un lote"),
-        new DefinicionPermiso("IMPORTACIONES", "ELIMINAR_LOTE", "Eliminar registros de un lote cerrado y documentos exclusivos"),
-        new DefinicionPermiso("IMPORTACIONES", "ELIMINAR_ARCHIVO", "Eliminar un registro y su documento exclusivo"),
+        new DefinicionPermiso("IMPORTACIONES", "ARCHIVAR_LOTE", "Archivar comprobantes de un lote para su titular"),
+        new DefinicionPermiso("IMPORTACIONES", "ARCHIVAR_CFDI", "Archivar un comprobante para su titular"),
+        new DefinicionPermiso("IMPORTACIONES", "RESTAURAR_CFDI", "Restaurar un comprobante tras verificar su XML original"),
         new DefinicionPermiso("PERIODOS_FISCALES", "CONSULTAR", "Consultar documentos por ejercicio, mes y fecha"),
         new DefinicionPermiso("ROLES", "CONSULTAR", "Consultar el catálogo de roles"),
         new DefinicionPermiso("ROLES", "CREAR", "Crear roles personalizados"),
