@@ -165,3 +165,6 @@ Administrar XML abre `PanelVisorCfdi` en CardLayout; un único `Fr_DatosCfdi` mo
 
 ## RF-018-A — Grafo documental
 `Fr_DatosCfdi` añade una pestaña `panelRelaciones` con barra superior, `PanelGrafoCfdi` (JavaBean Swing personalizado) y estado/selección inferior. GroupLayout explícito, constructores sin I/O; carga perezosa mediante SwingWorker. Doble clic reutiliza el diálogo existente; Volver permite navegar sin modales encadenados. El lienzo dibuja tarjetas y aristas en Java2D y no realiza consultas. Ver [RF-018-A](RF-018-A.md).
+
+## RF-020 — Clasificación de operaciones
+Contabilidad → Clasificación de operaciones abre PanelClasificacionOperaciones en CardLayout. GroupLayout, campos explícitos, barra de acciones, tabla con scroll y filtros inferiores; Fr_DatosCategoriaOperacion y Fr_HistorialClasificacionOperacion son diálogos de detalle con constructor vacío. Las cargas y escrituras se ejecutan con SwingWorker. Ver [RF-020](RF-020.md).
