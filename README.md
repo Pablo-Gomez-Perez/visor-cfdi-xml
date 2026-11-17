@@ -153,3 +153,6 @@ Ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) y [docs/RF-002.md](docs/RF-002.
 
 ### RF-015/016/017 — Administrar XML
 Visor documental independiente, filtros avanzados, orden SQL, agrupación por emisor y detalle de XML íntegro. Excluye archivados y respeta permisos por titular. Sin migración adicional. Ver [documentación](docs/RF-015-017.md).
+
+### RF-018-A — Grafo de relaciones documentales
+Desde el detalle CFDI, pestaña Documentos relacionados: grafo dirigido de hasta dos niveles, Java2D + JGraphT, zoom, arrastre y navegación. Ver [RF-018-A](docs/RF-018-A.md).

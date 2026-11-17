@@ -162,3 +162,6 @@ adaptarse al área útil de un solo monitor de aproximadamente 900×700.
 
 ## RF-015/016/017 — Visor documental
 Administrar XML abre `PanelVisorCfdi` en CardLayout; un único `Fr_DatosCfdi` modal muestra secciones y XML original. Las cabeceras de tabla ordenan en servidor, no localmente. Filtros inferiores con consulta explícita y selección de titular. Constructores vacíos, GroupLayout y SwingWorker. Ver [RF-015-017](RF-015-017.md).
+
+## RF-018-A — Grafo documental
+`Fr_DatosCfdi` añade una pestaña `panelRelaciones` con barra superior, `PanelGrafoCfdi` (JavaBean Swing personalizado) y estado/selección inferior. GroupLayout explícito, constructores sin I/O; carga perezosa mediante SwingWorker. Doble clic reutiliza el diálogo existente; Volver permite navegar sin modales encadenados. El lienzo dibuja tarjetas y aristas en Java2D y no realiza consultas. Ver [RF-018-A](RF-018-A.md).
