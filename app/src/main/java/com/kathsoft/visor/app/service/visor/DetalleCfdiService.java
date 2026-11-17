@@ -1,6 +1,8 @@
 package com.kathsoft.visor.app.service.visor;
 
 import com.kathsoft.visor.app.persistence.JpaContext;
+import com.kathsoft.visor.app.service.grafo.GrafoFiscalService;
+import com.kathsoft.visor.app.model.dto.grafo.GrafoFiscal;
 import com.kathsoft.visor.app.security.Permisos;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -32,6 +34,16 @@ public final class DetalleCfdiService {
 
     /** Contexto compartido. */
     public DetalleCfdiService(JpaContext jpa){this.jpa=Objects.requireNonNull(jpa);}
+
+    /** Autorización efectiva para la pestaña RF-018-A. */
+    public boolean puedeConsultarGrafo(Long actor,long titular){
+        return new GrafoFiscalService(jpa).permitido(actor,titular);
+    }
+
+    /** Consulta perezosa del grafo desde el detalle, con autorización independiente. */
+    public GrafoFiscal consultarGrafo(Long actor,long titular,long documento){
+        return new GrafoFiscalService(jpa).consultar(actor,titular,documento);
+    }
 
     /** Sección tabular independiente; los valores nulos no se inventan. */
     public record Seccion(String nombre,List<String> columnas,List<List<Object>> filas,boolean limitada){
