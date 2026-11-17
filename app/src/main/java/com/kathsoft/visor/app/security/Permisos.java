@@ -35,6 +35,10 @@ public final class Permisos {
     public static final String CFDI_CONSULTAR_GRAFO = "CFDI.CONSULTAR_GRAFO";
     public static final String CFDI_CONSULTAR_DETALLE = "CFDI.CONSULTAR_DETALLE";
 
+    public static final String OPERACIONES_CONSULTAR = "OPERACIONES.CONSULTAR";
+    public static final String OPERACIONES_CLASIFICAR = "OPERACIONES.CLASIFICAR";
+    public static final String OPERACIONES_GESTIONAR_CATEGORIAS = "OPERACIONES.GESTIONAR_CATEGORIAS";
+
     public static final String CFDI_IMPORTAR = "CFDI.IMPORTAR";
     public static final String CFDI_VALIDAR_TECNICAMENTE = "CFDI.VALIDAR_TECNICAMENTE";
     public static final String CFDI_CONSULTAR_CLASIFICACION = "CFDI.CONSULTAR_CLASIFICACION";
@@ -80,6 +84,9 @@ public final class Permisos {
         new DefinicionPermiso("CFDI", "CONSULTAR", "Consultar, filtrar, ordenar y agrupar comprobantes activos"),
         new DefinicionPermiso("CFDI", "CONSULTAR_GRAFO", "Consultar grafo de relaciones documentales activas"),
         new DefinicionPermiso("CFDI", "CONSULTAR_DETALLE", "Consultar datos completos y XML original de comprobantes activos"),
+        new DefinicionPermiso("OPERACIONES", "CONSULTAR", "Consultar operaciones y su historial de clasificación"),
+        new DefinicionPermiso("OPERACIONES", "CLASIFICAR", "Asignar, reclasificar y retirar categorías de operaciones"),
+        new DefinicionPermiso("OPERACIONES", "GESTIONAR_CATEGORIAS", "Crear y desactivar categorías administrativas"),
         new DefinicionPermiso("CFDI", "IMPORTAR", "Importar CFDI XML para contribuyentes asignados"),
         new DefinicionPermiso("CFDI", "VALIDAR_TECNICAMENTE", "Verificar XML y esquemas XSD SAT"),
         new DefinicionPermiso("CFDI", "CONSULTAR_CLASIFICACION", "Consultar clasificación fiscal de CFDI y retenciones"),
