@@ -60,7 +60,7 @@ CREATE TABLE `permiso` (
   `descripcion` varchar(200) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_permiso_recurso_accion` (`recurso`,`accion`)
-) ENGINE=InnoDB AUTO_INCREMENT=540 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=842 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- visor_cfdi.repositorio_documental definición
@@ -85,7 +85,7 @@ CREATE TABLE `rol` (
   `descripcion` varchar(200) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_rol_clave` (`clave`)
-) ENGINE=InnoDB AUTO_INCREMENT=55 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=70 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- visor_cfdi.sat_catalogo definición
@@ -1221,6 +1221,27 @@ CREATE TABLE `bitacora_cambio` (
   `valor_nuevo` text,
   PRIMARY KEY (`evento_id`,`atributo`),
   CONSTRAINT `fk_cambio_evento` FOREIGN KEY (`evento_id`) REFERENCES `bitacora_evento` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- visor_cfdi.clasificacion_operacion_evento definición
+
+CREATE TABLE `clasificacion_operacion_evento` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `contribuyente_id` bigint unsigned NOT NULL,
+  `documento_id` bigint unsigned NOT NULL,
+  `categoria_id` bigint unsigned DEFAULT NULL,
+  `usuario_id` bigint unsigned NOT NULL,
+  `motivo` varchar(600) NOT NULL,
+  `creado_en` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (`id`),
+  KEY `idx_clasop_doc` (`contribuyente_id`,`documento_id`,`id`),
+  KEY `idx_clasop_cat` (`categoria_id`,`contribuyente_id`),
+  KEY `idx_clasop_usuario` (`usuario_id`),
+  CONSTRAINT `fk_clasop_cat` FOREIGN KEY (`categoria_id`, `contribuyente_id`) REFERENCES `categoria_operacion` (`id`, `contribuyente_id`),
+  CONSTRAINT `fk_clasop_doc` FOREIGN KEY (`contribuyente_id`, `documento_id`) REFERENCES `contribuyente_documento` (`contribuyente_id`, `documento_id`),
+  CONSTRAINT `fk_clasop_usuario` FOREIGN KEY (`usuario_id`) REFERENCES `usuario` (`id`),
+  CONSTRAINT `chk_clasop_motivo` CHECK ((char_length(trim(`motivo`)) > 0))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 

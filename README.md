@@ -156,3 +156,6 @@ Visor documental independiente, filtros avanzados, orden SQL, agrupación por em
 
 ### RF-018-A — Grafo de relaciones documentales
 Desde el detalle CFDI, pestaña Documentos relacionados: grafo dirigido de hasta dos niveles, Java2D + JGraphT, zoom, arrastre y navegación. Ver [RF-018-A](docs/RF-018-A.md).
+
+### RF-020 — Clasificación de operaciones
+Contabilidad → Clasificación de operaciones. Categorías propias por titular, asignación masiva con motivo y revisión, historial por UUID, y filtros históricos por emisión. Instalaciones existentes: aplicar [migración RF-020](app/database/migrations/20261117_rf020_clasificacion_operaciones.sql). Ver [RF-020](docs/RF-020.md).
