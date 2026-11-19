@@ -156,10 +156,25 @@ public final class ClasificacionOperacionesService {
         Objects.requireNonNull(f);
         return jpa.consultar(em->{
             autorizar(em,actor,f.titular(),Permisos.OPERACIONES_CONSULTAR);
-            String sql="""
+            Query q=parametrosFiltro(em,"""
                 SELECT d.id,d.uuid,c.tipo,cd.sentido,d.fecha_emision,e.rfc,e.nombre_razon_social,r.rfc,r.nombre_razon_social,
                     c.subtotal,c.descuento,c.total,c.moneda,COALESCE(s.estado,'SIN_CONSULTA'),
                     COALESCE(h.id,0),h.categoria_id,cat.nombre,cat.naturaleza
+                """+universo(f)+" ORDER BY d.fecha_emision DESC,d.id DESC",f);
+            List<Operacion> datos=filas(q.setFirstResult(offset(pagina)).setMaxResults(PAGINA+1)).stream()
+                .map(x->new Operacion(numero(x[0]),texto(x[1]),texto(x[2]),texto(x[3]),fecha(x[4]),
+                    texto(x[5]),texto(x[6]),texto(x[7]),texto(x[8]),(BigDecimal)x[9],(BigDecimal)x[10],(BigDecimal)x[11],
+                    texto(x[12]),texto(x[13]),numero(x[14]),x[15]==null?null:numero(x[15]),texto(x[16]),texto(x[17]))).toList();
+            return pagina(datos);
+        });
+    }
+
+    /**
+     * Universo compartido por listado y resumen: mismos filtros, titular,
+     * estado de archivado y última revisión. Sin paginación aquí.
+     */
+    private static String universo(Filtro f){
+        String sql="""
                 FROM contribuyente_documento cd JOIN documento_fiscal d ON d.id=cd.documento_id
                 JOIN cfdi c ON c.documento_id=d.id
                 LEFT JOIN documento_participante e ON e.documento_id=d.id AND e.rol='E'
@@ -171,22 +186,114 @@ public final class ClasificacionOperacionesService {
                 LEFT JOIN categoria_operacion cat ON cat.id=h.categoria_id AND cat.contribuyente_id=cd.contribuyente_id
                 WHERE cd.contribuyente_id=:t AND cd.archivado_en IS NULL AND c.tipo IN ('I','E','N')
                     AND d.fecha_emision>=:desde AND d.fecha_emision<:hasta
+
                 """;
-            if(!f.sentido().isEmpty())sql+=" AND (cd.sentido=:sentido OR cd.sentido='AMBOS')";
-            if(!f.rfc().isEmpty())sql+=" AND (e.rfc LIKE :rfc OR r.rfc LIKE :rfc)";
-            if(f.categoria()==0)sql+=" AND h.categoria_id IS NULL";
-            if(f.categoria()>0)sql+=" AND h.categoria_id=:categoria";
-            Query q=em.createNativeQuery(sql+" ORDER BY d.fecha_emision DESC,d.id DESC")
-                .setParameter("t",f.titular()).setParameter("desde",Timestamp.valueOf(f.desde().atStartOfDay()))
-                .setParameter("hasta",Timestamp.valueOf(f.hasta().plusDays(1).atStartOfDay()));
-            if(!f.sentido().isEmpty())q.setParameter("sentido",f.sentido());
-            if(!f.rfc().isEmpty())q.setParameter("rfc",f.rfc()+"%");
-            if(f.categoria()>0)q.setParameter("categoria",f.categoria());
-            List<Operacion> datos=filas(q.setFirstResult(offset(pagina)).setMaxResults(PAGINA+1)).stream()
-                .map(x->new Operacion(numero(x[0]),texto(x[1]),texto(x[2]),texto(x[3]),fecha(x[4]),
-                    texto(x[5]),texto(x[6]),texto(x[7]),texto(x[8]),(BigDecimal)x[9],(BigDecimal)x[10],(BigDecimal)x[11],
-                    texto(x[12]),texto(x[13]),numero(x[14]),x[15]==null?null:numero(x[15]),texto(x[16]),texto(x[17]))).toList();
-            return pagina(datos);
+        if(!f.sentido().isEmpty())sql+=" AND (cd.sentido=:sentido OR cd.sentido='AMBOS')";
+        if(!f.rfc().isEmpty())sql+=" AND (e.rfc LIKE :rfc OR r.rfc LIKE :rfc)";
+        if(f.categoria()==0)sql+=" AND h.categoria_id IS NULL";
+        if(f.categoria()>0)sql+=" AND h.categoria_id=:categoria";
+        return sql;
+    }
+
+    private static Query parametrosFiltro(EntityManager em,String sql,Filtro f){
+        Query q=em.createNativeQuery(sql)
+            .setParameter("t",f.titular()).setParameter("desde",Timestamp.valueOf(f.desde().atStartOfDay()))
+            .setParameter("hasta",Timestamp.valueOf(f.hasta().plusDays(1).atStartOfDay()));
+        if(!f.sentido().isEmpty())q.setParameter("sentido",f.sentido());
+        if(!f.rfc().isEmpty())q.setParameter("rfc",f.rfc()+"%");
+        if(f.categoria()>0)q.setParameter("categoria",f.categoria());
+        return q;
+    }
+
+    /**
+     * Totales documentales por naturaleza, divisa, sentido, tipo CFDI y
+     * último estado SAT registrado. No constituyen determinación tributaria.
+     * Las bases declaradas no se fuerzan a coincidir con subtotal menos descuento.
+     */
+    public record GrupoResumen(String naturaleza,String moneda,String sentido,String tipo,String estadoSat,
+        long documentos,BigDecimal subtotalNeto,BigDecimal exento,BigDecimal tasa0,BigDecimal tasa16,
+        BigDecimal otrasTasas,BigDecimal noObjeto,BigDecimal sinIvaDesglosado,BigDecimal revisar,
+        BigDecimal sinConceptos,BigDecimal ivaTrasladado,BigDecimal diferencia){}
+
+    /** Conteos del universo completo, incluidos los documentos sin categoría. */
+    public record Resumen(long operaciones,long clasificadas,List<GrupoResumen> grupos){
+        public Resumen{grupos=List.copyOf(grupos);}
+        public long pendientes(){return operaciones-clasificadas;}
+    }
+
+    /**
+     * Agrupa sobre todo el universo de búsqueda, no las 100 filas visibles.
+     * Primero reduce impuestos a un registro por concepto y luego a uno por
+     * documento; evita multiplicar el subtotal por las líneas de impuestos.
+     * Conserva el IVA declarado incluso si la base requiere revisión.
+     */
+    public Resumen resumir(Long actor,Filtro f){
+        Objects.requireNonNull(f);
+        return jpa.consultar(em->{
+            autorizar(em,actor,f.titular(),Permisos.OPERACIONES_CONSULTAR);
+            String sql="""
+                WITH universo AS (
+                    SELECT d.id,h.categoria_id,COALESCE(cat.naturaleza,'SIN_CLASIFICAR') naturaleza,
+                        c.moneda,cd.sentido,c.tipo,COALESCE(s.estado,'SIN_CONSULTA') estado_sat,
+                        c.subtotal-COALESCE(c.descuento,0) neto
+                """+universo(f)+"""
+                ),
+                iva_concepto AS (
+                    SELECT i.concepto_id,COUNT(*) n,MAX(i.tipo_factor) factor,
+                        MAX(i.tasa_cuota) tasa,SUM(i.base) base_iva,SUM(COALESCE(i.importe,0)) iva,
+                        COUNT(i.importe) con_importe
+                    FROM universo u JOIN cfdi_concepto cc ON cc.documento_id=u.id
+                    JOIN cfdi_concepto_impuesto i ON i.concepto_id=cc.id
+                    WHERE i.movimiento='TRASLADO' AND i.impuesto='002'
+                    GROUP BY i.concepto_id
+                ),
+                conceptos AS (
+                    SELECT cc.documento_id,cc.importe-COALESCE(cc.descuento,0) neto,
+                        COALESCE(ic.iva,0) iva,ic.base_iva,
+                        CASE
+                            WHEN cc.importe-COALESCE(cc.descuento,0)<0 THEN 'REVISAR'
+                            WHEN ic.n IS NULL THEN CASE WHEN cc.objeto_impuesto='01' THEN 'NO_OBJETO'
+                                ELSE 'SIN_DESGLOSE' END
+                            WHEN ic.n<>1 OR cc.objeto_impuesto='01' THEN 'REVISAR'
+                            WHEN ic.factor='Exento' AND ic.con_importe=0 AND ic.tasa IS NULL THEN 'EXENTO'
+                            WHEN ic.factor='Tasa' AND ic.tasa>=0 AND ic.con_importe=1 THEN
+                                CASE WHEN ic.tasa=0 THEN 'TASA0' WHEN ic.tasa=0.16 THEN 'TASA16' ELSE 'OTRAS' END
+                            ELSE 'REVISAR'
+                        END grupo
+                    FROM universo u JOIN cfdi_concepto cc ON cc.documento_id=u.id
+                    LEFT JOIN iva_concepto ic ON ic.concepto_id=cc.id
+                ),
+                por_documento AS (
+                    SELECT documento_id,
+                        SUM(CASE WHEN grupo='EXENTO' THEN base_iva ELSE 0 END) exento,
+                        SUM(CASE WHEN grupo='TASA0' THEN base_iva ELSE 0 END) tasa0,
+                        SUM(CASE WHEN grupo='TASA16' THEN base_iva ELSE 0 END) tasa16,
+                        SUM(CASE WHEN grupo='OTRAS' THEN base_iva ELSE 0 END) otras,
+                        SUM(CASE WHEN grupo='NO_OBJETO' THEN neto ELSE 0 END) no_objeto,
+                        SUM(CASE WHEN grupo='SIN_DESGLOSE' THEN neto ELSE 0 END) sin_desglose,
+                        SUM(CASE WHEN grupo='REVISAR' THEN neto ELSE 0 END) revisar,
+                        SUM(iva) iva
+                    FROM conceptos GROUP BY documento_id
+                )
+                SELECT u.naturaleza,u.moneda,u.sentido,u.tipo,u.estado_sat,COUNT(*),COUNT(u.categoria_id),
+                    SUM(u.neto),SUM(COALESCE(p.exento,0)),SUM(COALESCE(p.tasa0,0)),SUM(COALESCE(p.tasa16,0)),
+                    SUM(COALESCE(p.otras,0)),SUM(COALESCE(p.no_objeto,0)),SUM(COALESCE(p.sin_desglose,0)),
+                    SUM(COALESCE(p.revisar,0)),SUM(CASE WHEN p.documento_id IS NULL THEN u.neto ELSE 0 END),
+                    SUM(COALESCE(p.iva,0)),
+                    SUM(CASE WHEN p.documento_id IS NULL THEN 0 ELSE u.neto-p.exento-p.tasa0-p.tasa16-p.otras-p.no_objeto-p.sin_desglose-p.revisar END)
+                FROM universo u LEFT JOIN por_documento p ON p.documento_id=u.id
+                GROUP BY u.naturaleza,u.moneda,u.sentido,u.tipo,u.estado_sat
+                ORDER BY u.naturaleza,u.moneda,u.sentido,u.tipo,u.estado_sat
+                """;
+            List<GrupoResumen> grupos=new ArrayList<>();
+            long operaciones=0,clasificadas=0;
+            for(Object[] x:filas(parametrosFiltro(em,sql,f))){
+                operaciones+=numero(x[5]);clasificadas+=numero(x[6]);
+                grupos.add(new GrupoResumen(texto(x[0]),texto(x[1]),texto(x[2]),texto(x[3]),texto(x[4]),numero(x[5]),
+                    (BigDecimal)x[7],(BigDecimal)x[8],(BigDecimal)x[9],(BigDecimal)x[10],(BigDecimal)x[11],
+                    (BigDecimal)x[12],(BigDecimal)x[13],(BigDecimal)x[14],(BigDecimal)x[15],(BigDecimal)x[16],(BigDecimal)x[17]));
+            }
+            return new Resumen(operaciones,clasificadas,grupos);
         });
     }
 
