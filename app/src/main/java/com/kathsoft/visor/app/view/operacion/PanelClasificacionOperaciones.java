@@ -63,7 +63,12 @@ public class PanelClasificacionOperaciones extends JPanel {
 	private boolean ocupado, siguiente, cargandoTitulares, cargandoCategorias;
 	private JTable tabla;
 	private JSplitPane splitPane;
-	private JScrollPane scroll;
+	private JScrollPane scroll, scrollHerramientas, scrollResumen;
+	private JTabbedPane pestanasTrabajo;
+	private JPanel panelResumen;
+	private JTable tablaResumen;
+	private DefaultTableModel modeloResumen;
+	private JLabel lblResumen, lblAdvertenciaResumen;
 	private JPanel panelHerramientasClasificacion;
 	private JLabel lblCategoria;
 	private JSeparator separator;
@@ -80,7 +85,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 		}
 	}
 
-	private record Consulta(Pagina<Operacion> pagina, List<Categoria> categorias) {
+	private record Consulta(Pagina<Operacion> pagina, List<Categoria> categorias, Resumen resumen) {
 	}
 
 	/** Constructor público sin I/O para WindowBuilder. */
@@ -275,12 +280,34 @@ public class PanelClasificacionOperaciones extends JPanel {
 		);
 		
 		scroll = new JScrollPane((Component) null);
-		splitPane.setRightComponent(scroll);
-				
 		scroll.setViewportView(tabla);
+		pestanasTrabajo = new JTabbedPane();
+		pestanasTrabajo.addTab("Operaciones", scroll);
+		panelResumen = new JPanel();
+		modeloResumen = new DefaultTableModel(new String[]{"Naturaleza", "Moneda", "Sentido", "Tipo CFDI", "Último SAT", "Documentos", "Subtotal neto", "Exento", "Tasa 0%", "Tasa 16%", "Otras tasas", "No objeto", "Sin desglose IVA", "Revisar", "Sin conceptos", "IVA concepto", "Diferencia"},0){
+			private static final long serialVersionUID=1L;
+			@Override public boolean isCellEditable(int r,int c){return false;}
+			@Override public Class<?> getColumnClass(int c){return c<5?String.class:c==5?Long.class:java.math.BigDecimal.class;}
+		};
+		tablaResumen = new JTable(modeloResumen);
+		tablaResumen.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+		tablaResumen.setAutoCreateRowSorter(true);
+		for(int i=0;i<tablaResumen.getColumnCount();i++) tablaResumen.getColumnModel().getColumn(i).setPreferredWidth(i==0?153:i==4?125:110);
+		scrollResumen = new JScrollPane(tablaResumen);
+		lblResumen = new JLabel("Sin consulta");
+		lblAdvertenciaResumen = new JLabel("Bases e IVA declarados, no IVA acreditable/pagado.");
+		lblAdvertenciaResumen.setToolTipText("Separado por moneda, sentido, tipo y estado SAT. Egresos sin compensar; diferencia = subtotal neto menos bases e importes agrupados. Sin conceptos y sin desglose no equivalen a exento.");
+		GroupLayout gr = new GroupLayout(panelResumen);panelResumen.setLayout(gr);gr.setAutoCreateGaps(true);gr.setAutoCreateContainerGaps(true);
+		gr.setHorizontalGroup(gr.createParallelGroup(Alignment.LEADING).addComponent(lblResumen,0,350,Short.MAX_VALUE).addComponent(scrollResumen,0,350,Short.MAX_VALUE).addComponent(lblAdvertenciaResumen,0,350,Short.MAX_VALUE));
+		gr.setVerticalGroup(gr.createSequentialGroup().addComponent(lblResumen).addComponent(scrollResumen,60,220,Short.MAX_VALUE).addComponent(lblAdvertenciaResumen));
+		pestanasTrabajo.addTab("Resumen de clasificación", panelResumen);
+		splitPane.setRightComponent(pestanasTrabajo);
 		
 		panelHerramientasClasificacion = new JPanel();
-		splitPane.setLeftComponent(panelHerramientasClasificacion);
+		scrollHerramientas = new JScrollPane(panelHerramientasClasificacion);
+		scrollHerramientas.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+		scrollHerramientas.setMinimumSize(new java.awt.Dimension(145, 0));
+		splitPane.setLeftComponent(scrollHerramientas);
 		btnClasificar = new JButton("Clasificar");
 		btnClasificar.setToolTipText("Ctrl+Enter: aplicar la categoría lateral a las filas seleccionadas");
 		btnClasificar.addActionListener(e -> clasificar(false));
@@ -365,7 +392,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 		splitPane.setDividerLocation(165);
 		splitPane.setResizeWeight(0.0);
 		panelHerramientasClasificacion.setMinimumSize(new java.awt.Dimension(145, 0));
-		scroll.setMinimumSize(new java.awt.Dimension(120, 60));
+		pestanasTrabajo.setMinimumSize(new java.awt.Dimension(120, 60));
 		panelCentralContenedor.setLayout(c);
 		c.setAutoCreateGaps(true);
 		c.setAutoCreateContainerGaps(true);
@@ -387,6 +414,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 			}
 		});
 		tabla.getSelectionModel().addListSelectionListener(e -> habilitar());
+		pestanasTrabajo.addChangeListener(e -> { cancelarEdicion(); habilitar(); });
 		cmbPeriodo.addActionListener(e -> habilitar());
 		btnBuscar.addActionListener(e -> buscar());
 		txfRfc.addActionListener(e -> buscar());
@@ -412,7 +440,8 @@ public class PanelClasificacionOperaciones extends JPanel {
 	private void habilitar() {
 		boolean libre = autorizado() && !ocupado;
 		boolean t = libre && titular() != null;
-		boolean seleccion = t && ultimo != null && tabla.getSelectedRowCount() > 0;
+		boolean operacionesVisibles = pestanasTrabajo.getSelectedIndex() == 0;
+		boolean seleccion = t && operacionesVisibles && ultimo != null && tabla.getSelectedRowCount() > 0;
 		boolean gestion = t && permisos.contains(Permisos.OPERACIONES_GESTIONAR_CATEGORIAS);
 		boolean cambio = seleccion && permisos.contains(Permisos.OPERACIONES_CLASIFICAR);
 		btnBuscar.setEnabled(t);
@@ -422,8 +451,8 @@ public class PanelClasificacionOperaciones extends JPanel {
 		tabla.setEnabled(libre);
 		btnDetalle.setEnabled(btnHistorial.isEnabled() && detalle != null
 				&& permisos.containsAll(Set.of(Permisos.CFDI_CONSULTAR, Permisos.CFDI_CONSULTAR_DETALLE)));
-		btnAnterior.setEnabled(t && ultimo != null && pagina > 0);
-		btnSiguiente.setEnabled(t && ultimo != null && siguiente);
+		btnAnterior.setEnabled(t && operacionesVisibles && ultimo != null && pagina > 0);
+		btnSiguiente.setEnabled(t && operacionesVisibles && ultimo != null && siguiente);
 		btnNueva.setEnabled(gestion);
 		btnPredeterminadas.setEnabled(gestion);
 		btnEstadoCategoria.setEnabled(gestion && categoria() != null);
@@ -446,6 +475,8 @@ public class PanelClasificacionOperaciones extends JPanel {
 		pagina = 0;
 		siguiente = false;
 		modelo.setRowCount(0);
+		modeloResumen.setRowCount(0);
+		lblResumen.setText("Sin consulta");
 	}
 
 	private void categorias(List<Categoria> datos) {
@@ -509,27 +540,47 @@ public class PanelClasificacionOperaciones extends JPanel {
 		}
 	}
 
+	/** Listado y resumen de los filtros efectivamente aplicados, nunca del TableModel. */
 	private void consultar(Filtro f, int p) {
-		if (f == null || p < 0 || ocupado || !autorizado())
-			return;
+		if (f == null || p < 0 || ocupado || !autorizado()) return;
 		var s = servicio;
 		Long actor = sesion.id();
+		boolean mismaPagina = Objects.equals(f,ultimo) && p == pagina;
+		var idsSeleccion = mismaPagina ? seleccionadas().stream().map(Operacion::id).collect(java.util.stream.Collectors.toSet()) : Set.<Long>of();
+		var vista = mismaPagina ? scroll.getViewport().getViewPosition() : new java.awt.Point();
 		limpiar();
 		lblEstado.setText("Consultando...");
-		ejecutar(() -> new Consulta(s.consultar(actor, f, p), s.categorias(actor, f.titular())), datos -> {
+		lblResumen.setText("Consultando todo el universo filtrado...");
+		ejecutar(() -> new Consulta(s.consultar(actor,f,p),s.categorias(actor,f.titular()),s.resumir(actor,f)), datos -> {
 			categorias(datos.categorias());
 			filas = datos.pagina().filas();
 			modelo.setRowCount(0);
 			for (Operacion x : filas)
-				modelo.addRow(new Object[] { opcionActual(x),
-						x.naturaleza(), x.emision(), x.tipo(), x.sentido(), x.rfcEmisor(), x.emisor(), x.rfcReceptor(),
-						x.receptor(), x.subtotal(), x.descuento(), x.total(), x.moneda(), x.estadoSat(), x.uuid() });
+				modelo.addRow(new Object[] { opcionActual(x), x.naturaleza(), x.emision(), x.tipo(), x.sentido(), x.rfcEmisor(), x.emisor(), x.rfcReceptor(),
+					x.receptor(), x.subtotal(), x.descuento(), x.total(), x.moneda(), x.estadoSat(), x.uuid() });
 			ultimo = f;
 			pagina = p;
 			siguiente = datos.pagina().siguiente();
-			lblEstado.setText("Página " + (p + 1) + " · " + filas.size() + " operaciones (orden local por columna)");
+			for(int i=0;i<filas.size();i++) if(idsSeleccion.contains(filas.get(i).id())){
+				int v=tabla.convertRowIndexToView(i);if(v>=0)tabla.addRowSelectionInterval(v,v);
+			}
+			scroll.getViewport().setViewPosition(vista);
+			mostrarResumen(datos.resumen(),f);
+			lblEstado.setText("Pág. "+(p+1)+" · "+filas.size()+" filas · "+datos.resumen().clasificadas()+"/"+datos.resumen().operaciones()+" clasificadas (filtros aplicados)");
 		}, () -> {
+			if(filas.isEmpty() && p>0) consultar(f,p-1);
 		});
+	}
+
+	private void mostrarResumen(Resumen resumen,Filtro f){
+		modeloResumen.setRowCount(0);
+		for(GrupoResumen g:resumen.grupos()){
+			modeloResumen.addRow(new Object[]{g.naturaleza(),g.moneda(),g.sentido(),g.tipo(),g.estadoSat(),g.documentos(),
+				g.subtotalNeto(),g.exento(),g.tasa0(),g.tasa16(),g.otrasTasas(),g.noObjeto(),g.sinIvaDesglosado(),
+				g.revisar(),g.sinConceptos(),g.ivaTrasladado(),g.diferencia()});
+		}
+		lblResumen.setText(resumen.operaciones()+" operaciones · "+resumen.clasificadas()+" clasificadas · "+resumen.pendientes()+" pendientes");
+		lblResumen.setToolTipText("Emisión "+f.desde()+" a "+f.hasta()+"; mismos filtros aplicados al listado, todas las páginas.");
 	}
 
 	private List<Operacion> seleccionadas() {
@@ -544,7 +595,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 
 	/** Solo la columna de categoría admite edición, con autorización y datos vigentes. */
 	private boolean puedeEditar(int fila) {
-		return autorizado() && !ocupado && ultimo != null && fila >= 0 && fila < filas.size()
+		return autorizado() && !ocupado && ultimo != null && pestanasTrabajo.getSelectedIndex() == 0 && fila >= 0 && fila < filas.size()
 			&& permisos.contains(Permisos.OPERACIONES_CLASIFICAR);
 	}
 
@@ -692,7 +743,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 			s.crearCategoria(actor, t, x.clave(), x.nombre(), x.naturaleza());
 			return null;
 		}, v -> {
-		}, this::cargarCategorias);
+		}, this::refrescarCategorias);
 	}
 
 	private void predeterminadas() {
@@ -702,8 +753,10 @@ public class PanelClasificacionOperaciones extends JPanel {
 		Long actor = sesion.id();
 		long t = titular().id();
 		ejecutar(() -> s.crearPredeterminadas(actor, t),
-				n -> JOptionPane.showMessageDialog(this, n + " categorías nuevas."), this::cargarCategorias);
+				n -> lblEstado.setText(n + " categorías nuevas."), this::refrescarCategorias);
 	}
+
+	private void refrescarCategorias(){ if(ultimo!=null) consultar(ultimo,pagina); else cargarCategorias(); }
 
 	private void estadoCategoria() {
 		if (!btnEstadoCategoria.isEnabled())
@@ -743,6 +796,8 @@ public class PanelClasificacionOperaciones extends JPanel {
 				} catch (InterruptedException ex) {
 					Thread.currentThread().interrupt();
 				} catch (ExecutionException ex) {
+					lblEstado.setText("Operación no completada; F5 para actualizar o Buscar.");
+					if(ultimo == null) lblResumen.setText("Resumen no disponible");
 					error(ex.getCause());
 				} finally {
 					ocupado = false;
