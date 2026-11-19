@@ -56,9 +56,11 @@ public class PanelClasificacionOperaciones extends JPanel {
 	private int pagina, generacion;
 	private boolean ocupado, siguiente, cargandoTitulares, cargandoCategorias;
 	private JTable tabla;
-	private boolean t;
-	private boolean seleccion;
-	private boolean libre;
+	private JSplitPane splitPane;
+	private JScrollPane scroll;
+	private JPanel panelHerramientasClasificacion;
+	private JLabel lblCategoria;
+	private JSeparator separator;
 
 	private record FiltroCategoria(long id, String etiqueta) {
 		@Override
@@ -130,6 +132,10 @@ public class PanelClasificacionOperaciones extends JPanel {
 		};
 		tabla = new JTable();
 		tabla.setModel(modelo);
+		tabla.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+		tabla.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+		tabla.setAutoCreateRowSorter(true);
+		
 		for (int i = 0; i < tabla.getColumnCount(); i++)
 			tabla.getColumnModel().getColumn(i).setPreferredWidth(i == 14 ? 260 : i == 6 || i == 8 ? 210 : 120);
 		lblTitular = new JLabel("Titular");
@@ -217,13 +223,13 @@ public class PanelClasificacionOperaciones extends JPanel {
 						.addComponent(lblFiltro)
 						.addComponent(cmbFiltro, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE)
 						.addComponent(btnBuscar))
-					.addGap(71)
+					.addPreferredGap(ComponentPlacement.RELATED)
 					.addComponent(lblEstado))
 		);
 		panelInferiorBusqueda.setLayout(f);
 		f.setAutoCreateGaps(true);
 		
-		JSplitPane splitPane = new JSplitPane();
+		splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
 		splitPane.setDividerSize(5);
 		GroupLayout c = new GroupLayout(panelCentralContenedor);
 		c.setHorizontalGroup(
@@ -239,15 +245,15 @@ public class PanelClasificacionOperaciones extends JPanel {
 					.addGap(10)
 					.addComponent(splitPane, GroupLayout.DEFAULT_SIZE, 447, Short.MAX_VALUE)
 					.addPreferredGap(ComponentPlacement.RELATED)
-					.addComponent(panelInferiorBusqueda, GroupLayout.PREFERRED_SIZE, 124, GroupLayout.PREFERRED_SIZE))
+					.addComponent(panelInferiorBusqueda, GroupLayout.PREFERRED_SIZE, GroupLayout.DEFAULT_SIZE, GroupLayout.PREFERRED_SIZE))
 		);
 		
-		JScrollPane scroll = new JScrollPane((Component) null);
+		scroll = new JScrollPane((Component) null);
 		splitPane.setRightComponent(scroll);
 				
 		scroll.setViewportView(tabla);
 		
-		JPanel panelHerramientasClasificacion = new JPanel();
+		panelHerramientasClasificacion = new JPanel();
 		splitPane.setLeftComponent(panelHerramientasClasificacion);
 		btnClasificar = new JButton("Clasificar");
 		btnClasificar.addActionListener(e -> clasificar(false));
@@ -262,14 +268,14 @@ public class PanelClasificacionOperaciones extends JPanel {
 		btnSiguiente = new JButton("Siguiente");
 		btnSiguiente.addActionListener(e -> consultar(ultimo, pagina + 1));
 		
-		JSeparator separator = new JSeparator();
+		separator = new JSeparator();
 		cmbCategoria = new JComboBox<>();
 		cmbCategoria.addActionListener(e -> {
 			if (!cargandoCategorias)
 				habilitar();
 		});
 		
-		JLabel lblCategoria = new JLabel("Titular");
+		lblCategoria = new JLabel("Categoría");
 		btnNueva = new JButton("Nueva");
 		btnNueva.addActionListener(e -> nueva());
 		btnPredeterminadas = new JButton("Iniciales");
@@ -285,7 +291,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 						.addComponent(btnEstadoCategoria, GroupLayout.PREFERRED_SIZE, 131, Short.MAX_VALUE)
 						.addComponent(cmbCategoria, 0, 125, Short.MAX_VALUE)
 						.addGroup(gl_panelHerramientasClasificacion.createSequentialGroup()
-							.addComponent(lblCategoria, GroupLayout.PREFERRED_SIZE, 40, GroupLayout.PREFERRED_SIZE)
+							.addComponent(lblCategoria)
 							.addPreferredGap(ComponentPlacement.RELATED)
 							.addComponent(separator, GroupLayout.PREFERRED_SIZE, 73, Short.MAX_VALUE))
 						.addComponent(btnRetirar, GroupLayout.DEFAULT_SIZE, 125, Short.MAX_VALUE)
@@ -328,7 +334,10 @@ public class PanelClasificacionOperaciones extends JPanel {
 					.addContainerGap(32, Short.MAX_VALUE))
 		);
 		panelHerramientasClasificacion.setLayout(gl_panelHerramientasClasificacion);
-		splitPane.setDividerLocation(150);
+		splitPane.setDividerLocation(165);
+		splitPane.setResizeWeight(0.0);
+		panelHerramientasClasificacion.setMinimumSize(new java.awt.Dimension(145, 0));
+		scroll.setMinimumSize(new java.awt.Dimension(120, 60));
 		panelCentralContenedor.setLayout(c);
 		c.setAutoCreateGaps(true);
 		c.setAutoCreateContainerGaps(true);
@@ -349,6 +358,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 				cargarCategorias();
 			}
 		});
+		tabla.getSelectionModel().addListSelectionListener(e -> habilitar());
 		cmbPeriodo.addActionListener(e -> habilitar());
 		btnBuscar.addActionListener(e -> buscar());
 		txfRfc.addActionListener(e -> buscar());
@@ -371,11 +381,16 @@ public class PanelClasificacionOperaciones extends JPanel {
 	}
 
 	private void habilitar() {
+		boolean libre = autorizado() && !ocupado;
+		boolean t = libre && titular() != null;
+		boolean seleccion = t && ultimo != null && tabla.getSelectedRowCount() > 0;
 		boolean gestion = t && permisos.contains(Permisos.OPERACIONES_GESTIONAR_CATEGORIAS);
 		boolean cambio = seleccion && permisos.contains(Permisos.OPERACIONES_CLASIFICAR);
 		btnBuscar.setEnabled(t);
 		btnClasificar.setEnabled(cambio && categoria() != null && categoria().activa());
 		btnRetirar.setEnabled(cambio);
+		btnHistorial.setEnabled(seleccion && tabla.getSelectedRowCount() == 1);
+		tabla.setEnabled(libre);
 		btnDetalle.setEnabled(btnHistorial.isEnabled() && detalle != null
 				&& permisos.containsAll(Set.of(Permisos.CFDI_CONSULTAR, Permisos.CFDI_CONSULTAR_DETALLE)));
 		btnAnterior.setEnabled(t && ultimo != null && pagina > 0);
