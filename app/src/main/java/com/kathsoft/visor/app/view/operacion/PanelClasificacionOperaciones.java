@@ -16,6 +16,12 @@ import java.time.format.ResolverStyle;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import javax.swing.table.TableCellEditor;
+import javax.swing.table.TableCellRenderer;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -61,6 +67,11 @@ public class PanelClasificacionOperaciones extends JPanel {
 	private JPanel panelHerramientasClasificacion;
 	private JLabel lblCategoria;
 	private JSeparator separator;
+	private List<Categoria> catalogo = List.of();
+	private static final String MOTIVO_INICIAL = "Clasificación inicial manual mediante RF-020.";
+	private record OpcionCategoria(Long id, String nombre) {
+		@Override public String toString() { return nombre; }
+	}
 
 	private record FiltroCategoria(long id, String etiqueta) {
 		@Override
@@ -127,7 +138,19 @@ public class PanelClasificacionOperaciones extends JPanel {
 
 			@Override
 			public boolean isCellEditable(int r, int c) {
-				return false;
+				return c == 0 && puedeEditar(r);
+			}
+			@Override public void setValueAt(Object valor, int r, int c) {
+				if(c != 0 || !(valor instanceof OpcionCategoria opcion) || !puedeEditar(r)) return;
+				Operacion op = filas.get(r);
+				Filtro f = ultimo;
+				int ciclo = generacion;
+				// JTable termina de cerrar el editor antes de abrir un diálogo o iniciar I/O.
+				SwingUtilities.invokeLater(() -> {
+					if(ciclo == generacion && Objects.equals(f, ultimo) && !ocupado)
+						aplicar(List.of(op), opcion.id());
+				});
+				// No se modifica la celda antes de que MySQL confirme la transacción.
 			}
 		};
 		tabla = new JTable();
@@ -135,9 +158,12 @@ public class PanelClasificacionOperaciones extends JPanel {
 		tabla.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
 		tabla.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
 		tabla.setAutoCreateRowSorter(true);
+		tabla.getColumnModel().getColumn(0).setCellEditor(new EditorCategoria());
+		tabla.getColumnModel().getColumn(0).setCellRenderer(new RenderCategoria());
+		tabla.setRowHeight(Math.max(tabla.getRowHeight(), 25));
 		
 		for (int i = 0; i < tabla.getColumnCount(); i++)
-			tabla.getColumnModel().getColumn(i).setPreferredWidth(i == 14 ? 260 : i == 6 || i == 8 ? 210 : 120);
+			tabla.getColumnModel().getColumn(i).setPreferredWidth(i == 14 ? 260 : i == 0 || i == 6 || i == 8 ? 210 : 120);
 		lblTitular = new JLabel("Titular");
 		cmbTitular = new JComboBox<>();
 		lblPeriodo = new JLabel("Periodo");
@@ -256,12 +282,14 @@ public class PanelClasificacionOperaciones extends JPanel {
 		panelHerramientasClasificacion = new JPanel();
 		splitPane.setLeftComponent(panelHerramientasClasificacion);
 		btnClasificar = new JButton("Clasificar");
+		btnClasificar.setToolTipText("Ctrl+Enter: aplicar la categoría lateral a las filas seleccionadas");
 		btnClasificar.addActionListener(e -> clasificar(false));
 		btnRetirar = new JButton("Retirar");
 		btnRetirar.addActionListener(e -> clasificar(true));
 		btnDetalle = new JButton("Ver CFDI");
 		btnDetalle.addActionListener(e -> detalle());
 		btnHistorial = new JButton("Historial");
+		btnHistorial.setToolTipText("Ctrl+H: historial de la fila seleccionada");
 		btnHistorial.addActionListener(e -> historial());
 		btnAnterior = new JButton("Anterior");
 		btnAnterior.addActionListener(e -> consultar(ultimo, pagina - 1));
@@ -365,6 +393,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 		txfDesde.addActionListener(e -> buscar());
 		txfHasta.addActionListener(e -> buscar());
 		categorias(List.of());
+		instalarAtajos();
 		habilitar();
 	}
 
@@ -411,6 +440,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 	}
 
 	private void limpiar() {
+		cancelarEdicion();
 		filas = List.of();
 		ultimo = null;
 		pagina = 0;
@@ -419,6 +449,8 @@ public class PanelClasificacionOperaciones extends JPanel {
 	}
 
 	private void categorias(List<Categoria> datos) {
+		cancelarEdicion();
+		catalogo = List.copyOf(datos);
 		long filtro = cmbFiltro.getSelectedItem() instanceof FiltroCategoria f ? f.id() : -1;
 		long cat = categoria() == null ? 0 : categoria().id();
 		cargandoCategorias = true;
@@ -489,7 +521,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 			filas = datos.pagina().filas();
 			modelo.setRowCount(0);
 			for (Operacion x : filas)
-				modelo.addRow(new Object[] { x.categoria() == null ? "Sin clasificación" : x.categoria(),
+				modelo.addRow(new Object[] { opcionActual(x),
 						x.naturaleza(), x.emision(), x.tipo(), x.sentido(), x.rfcEmisor(), x.emisor(), x.rfcReceptor(),
 						x.receptor(), x.subtotal(), x.descuento(), x.total(), x.moneda(), x.estadoSat(), x.uuid() });
 			ultimo = f;
@@ -510,28 +542,116 @@ public class PanelClasificacionOperaciones extends JPanel {
 		return salida;
 	}
 
-	private void clasificar(boolean retirar) {
-		if (retirar ? !btnRetirar.isEnabled() : !btnClasificar.isEnabled())
-			return;
-		List<Seleccion> sel = seleccionadas().stream().map(x -> new Seleccion(x.id(), x.revision())).toList();
-		if (sel.isEmpty())
-			return;
-		Categoria c = categoria();
-		String motivo = JOptionPane.showInputDialog(this, (retirar ? "Retirar categoría" : "Asignar " + c) + " a "
-				+ sel.size() + " operaciones. Motivo obligatorio:");
-		if (motivo == null)
-			return;
-		if (motivo.isBlank()) {
-			error(new IllegalArgumentException("El motivo es obligatorio"));
-			return;
+	/** Solo la columna de categoría admite edición, con autorización y datos vigentes. */
+	private boolean puedeEditar(int fila) {
+		return autorizado() && !ocupado && ultimo != null && fila >= 0 && fila < filas.size()
+			&& permisos.contains(Permisos.OPERACIONES_CLASIFICAR);
+	}
+
+	private OpcionCategoria opcionActual(Operacion op) {
+		Categoria cat = catalogo.stream().filter(c -> Objects.equals(c.id(), op.categoriaId())).findFirst().orElse(null);
+		return new OpcionCategoria(op.categoriaId(), op.categoriaId() == null ? "Sin clasificación"
+			: op.categoria() + (cat != null && !cat.activa() ? " (inactiva)" : ""));
+	}
+
+	/** Editor reutilizable; las categorías inactivas solo aparecen como valor actual. */
+	private final class EditorCategoria extends AbstractCellEditor implements TableCellEditor {
+		private static final long serialVersionUID = 1L;
+		private final JComboBox<OpcionCategoria> combo = new JComboBox<>();
+		private boolean preparando;
+		EditorCategoria() {
+			combo.addActionListener(e -> { if(!preparando) stopCellEditing(); });
 		}
-		var s = servicio;
-		Long actor = sesion.id();
-		Filtro f = ultimo;
-		int p = pagina;
-		Long id = retirar ? null : c.id();
-		ejecutar(() -> s.clasificar(actor, f.titular(), sel, id, motivo),
-				n -> JOptionPane.showMessageDialog(this, n + " operaciones modificadas."), () -> consultar(f, p));
+		@Override public Component getTableCellEditorComponent(JTable t, Object v, boolean sel, int fila, int columna) {
+			preparando = true;
+			try {
+				Operacion op = filas.get(t.convertRowIndexToModel(fila));
+				OpcionCategoria actual = opcionActual(op);
+				combo.removeAllItems();
+				combo.addItem(new OpcionCategoria(null, "Sin clasificación"));
+				for(Categoria c : catalogo) {
+					if(c.activa()) combo.addItem(new OpcionCategoria(c.id(), c.nombre()));
+				}
+				if(op.categoriaId() != null && catalogo.stream().noneMatch(c -> c.activa() && Objects.equals(c.id(),op.categoriaId())))
+					combo.addItem(actual);
+				combo.setSelectedItem(actual);
+			} finally { preparando = false; }
+			return combo;
+		}
+		@Override public Object getCellEditorValue() { return combo.getSelectedItem(); }
+	}
+
+	/** Un único JComboBox decorativo para todas las filas; nunca consulta BD. */
+	private final class RenderCategoria extends JComboBox<OpcionCategoria> implements TableCellRenderer {
+		private static final long serialVersionUID = 1L;
+		@Override public Component getTableCellRendererComponent(JTable t,Object v,boolean sel,boolean foco,int fila,int columna) {
+			removeAllItems();
+			if(v instanceof OpcionCategoria o) addItem(o);
+			setEnabled(puedeEditar(t.convertRowIndexToModel(fila)));
+			setBackground(sel?t.getSelectionBackground():t.getBackground());
+			setForeground(sel?t.getSelectionForeground():t.getForeground());
+			return this;
+		}
+	}
+
+	private void cancelarEdicion() {
+		if(tabla.isEditing()) tabla.getCellEditor().cancelCellEditing();
+	}
+
+	private void instalarAtajos() {
+		atajo(this, JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.CTRL_DOWN_MASK),
+			"aplicarCategoria", () -> { if(!tabla.isEditing()) clasificar(false); });
+		atajo(tabla, JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.CTRL_DOWN_MASK),
+			"aplicarCategoria", () -> { if(!tabla.isEditing()) clasificar(false); });
+		atajo(tabla, JComponent.WHEN_FOCUSED, KeyStroke.getKeyStroke(KeyEvent.VK_A, InputEvent.CTRL_DOWN_MASK),
+			"seleccionarPagina", () -> { if(tabla.isEnabled() && !tabla.isEditing()) tabla.selectAll(); });
+		atajo(this, JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, KeyStroke.getKeyStroke(KeyEvent.VK_F, InputEvent.CTRL_DOWN_MASK),
+			"buscarRfc", () -> { if(txfRfc.isEnabled()) { cancelarEdicion(); txfRfc.requestFocusInWindow(); txfRfc.selectAll(); } });
+		atajo(this, JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, KeyStroke.getKeyStroke(KeyEvent.VK_H, InputEvent.CTRL_DOWN_MASK),
+			"historialOperacion", () -> { if(!tabla.isEditing()) historial(); });
+		atajo(this, JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, KeyStroke.getKeyStroke(KeyEvent.VK_F5,0),
+			"actualizarOperaciones", () -> { if(ultimo != null && !ocupado) consultar(ultimo,pagina); });
+		atajo(tabla, JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE,0),
+			"cancelarCategoria", this::cancelarEdicion);
+	}
+
+	private static void atajo(JComponent componente,int condicion,KeyStroke tecla,String nombre,Runnable accion) {
+		componente.getInputMap(condicion).put(tecla,nombre);
+		componente.getActionMap().put(nombre,new AbstractAction(){
+			private static final long serialVersionUID=1L;
+			@Override public void actionPerformed(ActionEvent e){accion.run();}
+		});
+	}
+
+	private void clasificar(boolean retirar) {
+		if (retirar ? !btnRetirar.isEnabled() : !btnClasificar.isEnabled()) return;
+		cancelarEdicion();
+		aplicar(seleccionadas(), retirar ? null : categoria().id());
+	}
+
+	/** Solo la primera asignación (sin eventos anteriores) admite motivo automático. */
+	static boolean motivoAutomatico(List<Operacion> cambios, Long categoria) {
+		return categoria != null && !cambios.isEmpty() && cambios.stream().allMatch(o -> o.revision() == 0 && o.categoriaId() == null);
+	}
+
+	private void aplicar(List<Operacion> operaciones, Long id) {
+		if(ocupado || ultimo == null || !autorizado() || !permisos.contains(Permisos.OPERACIONES_CLASIFICAR)) return;
+		List<Operacion> cambios = operaciones.stream().filter(o -> !Objects.equals(o.categoriaId(),id)).toList();
+		if(cambios.isEmpty()) return;
+		if(id != null && catalogo.stream().noneMatch(c -> c.id() == id && c.activa())) {
+			error(new IllegalArgumentException("Seleccione una categoría activa")); return;
+		}
+		String motivo = motivoAutomatico(cambios,id) ? MOTIVO_INICIAL
+			: JOptionPane.showInputDialog(this,(id == null ? "Retirar categoría" : "Reclasificar")+" "+cambios.size()+" operaciones. Motivo obligatorio:");
+		if(motivo == null) return;
+		if(motivo.isBlank() || motivo.strip().length() > 600) {
+			error(new IllegalArgumentException("Capture un motivo de 1 a 600 caracteres")); return;
+		}
+		List<Seleccion> sel = cambios.stream().map(o -> new Seleccion(o.id(),o.revision())).toList();
+		var s = servicio; Long actor = sesion.id(); Filtro f = ultimo; int p = pagina;
+		lblEstado.setText("Guardando clasificación...");
+		ejecutar(() -> s.clasificar(actor,f.titular(),sel,id,motivo),
+			n -> lblEstado.setText(n+" operaciones modificadas."), () -> consultar(f,p));
 	}
 
 	private void historial() {
