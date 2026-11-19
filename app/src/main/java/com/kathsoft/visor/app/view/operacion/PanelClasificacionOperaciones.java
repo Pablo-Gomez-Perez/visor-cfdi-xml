@@ -145,6 +145,9 @@ public class PanelClasificacionOperaciones extends JPanel {
 			public boolean isCellEditable(int r, int c) {
 				return c == 0 && puedeEditar(r);
 			}
+			@Override public Class<?> getColumnClass(int c){
+				return c==0?OpcionCategoria.class:c==2?java.time.LocalDateTime.class:c>=9&&c<=11?java.math.BigDecimal.class:String.class;
+			}
 			@Override public void setValueAt(Object valor, int r, int c) {
 				if(c != 0 || !(valor instanceof OpcionCategoria opcion) || !puedeEditar(r)) return;
 				Operacion op = filas.get(r);
@@ -304,7 +307,8 @@ public class PanelClasificacionOperaciones extends JPanel {
 		splitPane.setRightComponent(pestanasTrabajo);
 		
 		panelHerramientasClasificacion = new JPanel();
-		scrollHerramientas = new JScrollPane(panelHerramientasClasificacion);
+		scrollHerramientas = new JScrollPane();
+		scrollHerramientas.setViewportView(panelHerramientasClasificacion);
 		scrollHerramientas.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		scrollHerramientas.setMinimumSize(new java.awt.Dimension(145, 0));
 		splitPane.setLeftComponent(scrollHerramientas);
@@ -477,6 +481,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 		modelo.setRowCount(0);
 		modeloResumen.setRowCount(0);
 		lblResumen.setText("Sin consulta");
+		lblResumen.setToolTipText(null);
 	}
 
 	private void categorias(List<Categoria> datos) {
@@ -610,6 +615,9 @@ public class PanelClasificacionOperaciones extends JPanel {
 		private static final long serialVersionUID = 1L;
 		private final JComboBox<OpcionCategoria> combo = new JComboBox<>();
 		private boolean preparando;
+		@Override public boolean isCellEditable(java.util.EventObject evento) {
+			return !(evento instanceof java.awt.event.MouseEvent e) || (!e.isControlDown() && !e.isShiftDown() && SwingUtilities.isLeftMouseButton(e));
+		}
 		EditorCategoria() {
 			combo.addActionListener(e -> { if(!preparando) stopCellEditing(); });
 		}
@@ -627,6 +635,9 @@ public class PanelClasificacionOperaciones extends JPanel {
 					combo.addItem(actual);
 				combo.setSelectedItem(actual);
 			} finally { preparando = false; }
+			SwingUtilities.invokeLater(() -> {
+				if(t.isEditing() && t.getCellEditor() == this && combo.isShowing()) combo.showPopup();
+			});
 			return combo;
 		}
 		@Override public Object getCellEditorValue() { return combo.getSelectedItem(); }
@@ -770,12 +781,13 @@ public class PanelClasificacionOperaciones extends JPanel {
 		Long actor = sesion.id();
 		long t = titular().id();
 		ejecutar(() -> s.cambiarEstadoCategoria(actor, t, c.id(), !c.activa()), v -> {
-		}, this::cargarCategorias);
+		}, this::refrescarCategorias);
 	}
 
 	private <T> void ejecutar(Callable<T> trabajo, Consumer<T> resultado, Runnable despues) {
 		if (ocupado)
 			return;
+		cancelarEdicion();
 		int ciclo = ++generacion;
 		ocupado = true;
 		habilitar();
