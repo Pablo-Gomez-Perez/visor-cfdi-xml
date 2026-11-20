@@ -118,9 +118,14 @@ public final class ClasificacionDetalleService {
             List<Asignacion> anteriores = asignaciones(em,titular,tipo,origen);
             if (anteriores.equals(nuevas)) return vigente;
             String razon = motivo == null ? "" : motivo.strip();
-            if (vigente == 0 && anteriores.isEmpty() && !nuevas.isEmpty() && razon.isEmpty()) razon = "Clasificación inicial manual mediante RF-021.";
+            boolean conHistoria=!em.createNativeQuery("SELECT b.id FROM bitacora_evento b JOIN bitacora_cambio c ON c.evento_id=b.id WHERE b.contribuyente_id=:t AND b.entidad_id=:d AND b.entidad='CLASIFICACION_DETALLE' AND c.atributo=:a LIMIT 1 FOR UPDATE")
+                .setParameter("t",titular).setParameter("d",documento).setParameter("a",tipo.name()+":"+origen).getResultList().isEmpty();
+            if (!conHistoria && anteriores.isEmpty() && !nuevas.isEmpty() && razon.isEmpty()) razon = "Clasificación inicial manual mediante RF-021.";
             if (razon.isEmpty() || razon.length() > 600) throw new IllegalArgumentException("Motivo obligatorio de hasta 600 caracteres");
-            for (Asignacion a : nuevas) validarDestino(em,titular,tipo,a.destino());
+            for (Asignacion a : nuevas) {
+                validarDestino(em,titular,tipo,a.destino());
+                if(tipo==Tipo.IMPUESTO && a.nota().isBlank())throw new IllegalArgumentException("Justificación obligatoria del tratamiento fiscal");
+            }
             if (tipo == Tipo.CONCEPTO) {
                 em.createQuery("delete from ClasificacionConceptoEntity x where x.contribuyenteId=:t and x.origenId=:o")
                     .setParameter("t",titular).setParameter("o",origen).executeUpdate();

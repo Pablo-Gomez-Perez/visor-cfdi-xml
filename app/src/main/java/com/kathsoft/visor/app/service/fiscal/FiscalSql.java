@@ -28,12 +28,12 @@ final class FiscalSql {
           SELECT c.concepto_id,COUNT(*) cantidad,SUM(c.importe_asignado) asignado
           FROM clasificacion_concepto c JOIN conceptos cc ON cc.id=c.concepto_id WHERE c.contribuyente_id=:t GROUP BY c.concepto_id
         ), partes AS (
-          SELECT cc.id concepto_id,cc.documento_id,cat.id categoria_id,cat.nombre categoria,cat.naturaleza,c.importe_asignado neto,
+          SELECT cc.id concepto_id,cc.documento_id,cat.id categoria_id,cat.nombre categoria,cat.naturaleza,SUM(c.importe_asignado) neto,
             cc.neto original_neto,'DETALLE' origen
           FROM conceptos cc JOIN distribuidos ds ON ds.concepto_id=cc.id
           JOIN clasificacion_concepto c ON c.concepto_id=cc.id AND c.contribuyente_id=:t
           JOIN categoria_operacion cat ON cat.id=c.categoria_id AND cat.contribuyente_id=:t
-          WHERE ds.asignado<=cc.neto
+          WHERE ds.asignado<=cc.neto GROUP BY cc.id,cc.documento_id,cat.id,cat.nombre,cat.naturaleza,cc.neto
           UNION ALL
           SELECT cc.id,cc.documento_id,NULL,NULL,'SIN_CLASIFICAR',cc.neto-ds.asignado,cc.neto,'REMANENTE'
           FROM conceptos cc JOIN distribuidos ds ON ds.concepto_id=cc.id WHERE ds.asignado<cc.neto
@@ -43,9 +43,34 @@ final class FiscalSql {
           UNION ALL
           SELECT cc.id,cc.documento_id,NULL,NULL,'SIN_CLASIFICAR',cc.neto,cc.neto,'REVISAR_EXCESO'
           FROM conceptos cc JOIN distribuidos ds ON ds.concepto_id=cc.id WHERE ds.asignado>cc.neto
+          UNION ALL
+          SELECT NULL,u.documento_id,u.categoria_id,u.categoria,u.naturaleza,u.subtotal-u.descuento,u.subtotal-u.descuento,'SIN_CONCEPTOS'
+          FROM universo u WHERE NOT EXISTS(SELECT 1 FROM conceptos cc WHERE cc.documento_id=u.documento_id)
         ), iva_concepto AS (
           SELECT i.concepto_id,COUNT(*) lineas,MAX(i.tipo_factor) factor,MAX(i.tasa_cuota) tasa,SUM(i.base) base,SUM(i.importe) iva
           FROM conceptos cc JOIN cfdi_concepto_impuesto i ON i.concepto_id=cc.id WHERE i.impuesto='002' AND i.movimiento='TRASLADO' GROUP BY i.concepto_id
+        )
+        """;
+    /**
+     * Reparte únicamente valores derivados. Cada impuesto mantiene su base e importe originales.
+     * Redondea las partes a seis decimales HALF_UP y asigna el residuo a la última categoría
+     * (orden por ID; remanente primero). Así las partes completas reconstruyen el original.
+     * Si el neto no es positivo, no inventa una proporción y deja derivados en null.
+     */
+    static final String IMPUESTOS_DISTRIBUIDOS="""
+        ,impuestos_partidos AS (
+          SELECT p.concepto_id,p.categoria_id,i.id impuesto_id,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota,
+            i.base base_original,i.importe impuesto_original,
+            CASE WHEN p.original_neto>0 THEN ROUND(i.base*p.neto/p.original_neto,6) END base_parte,
+            CASE WHEN p.original_neto>0 THEN ROUND(i.importe*p.neto/p.original_neto,6) END impuesto_parte,
+            ROW_NUMBER() OVER(PARTITION BY p.concepto_id,i.id ORDER BY COALESCE(p.categoria_id,0)) posicion,
+            COUNT(*) OVER(PARTITION BY p.concepto_id,i.id) cantidad
+          FROM partes p JOIN cfdi_concepto_impuesto i ON i.concepto_id=p.concepto_id
+        ),impuestos_distribuidos AS (
+          SELECT ip.*,
+            CASE WHEN base_parte IS NULL THEN NULL WHEN posicion=cantidad THEN base_original-SUM(base_parte) OVER(PARTITION BY concepto_id,impuesto_id)+base_parte ELSE base_parte END base_distribuida,
+            CASE WHEN impuesto_parte IS NULL THEN NULL WHEN posicion=cantidad THEN impuesto_original-SUM(impuesto_parte) OVER(PARTITION BY concepto_id,impuesto_id)+impuesto_parte ELSE impuesto_parte END impuesto_distribuido
+          FROM impuestos_partidos ip
         )
         """;
     static Query query(EntityManager em,String sql,FiltroFiscal f){
