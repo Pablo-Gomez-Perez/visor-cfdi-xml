@@ -121,7 +121,7 @@ La interfaz sigue el patrón de Kath ERP: **una ventana principal**
 `CardLayout` central. Los módulos de lista son `JPanel` separados,
 por ejemplo `app.view.usuario.PanelUsuarios`, y los datos de un
 registro se editan desde un único diálogo modal `Fr_DatosUsuario`.
-Las funciones de CFDI no desarrolladas se muestran deshabilitadas.
+Las funciones pendientes se muestran deshabilitadas.
 
 Guía obligatoria: [docs/UI-SWING-WINDOWBUILDER.md](docs/UI-SWING-WINDOWBUILDER.md).
 
@@ -129,14 +129,21 @@ Abra el archivo Java con **Open With → WindowBuilder Editor → Design**. El c
 
 ## Pruebas
 
-`mvn test` ejecuta pruebas unitarias; `mvn verify` ejecuta además `UsuariosServiceIT` mediante Testcontainers con `mysql:8.0.46`. La integración importa el SQL completo del repositorio en un contenedor desechable y **no requiere ni modifica la base de desarrollo**. Necesita Docker disponible.
+`mvn --batch-mode --no-transfer-progress -f app/pom.xml verify` ejecuta
+unitarias e integración MySQL 8 mediante Testcontainers. Incluye escenario
+fiscal sintético de dos meses, clasificación mixta y evidencia financiera.
+Importa el esquema SQL completo en contenedores desechables; **no modifica una
+base de usuario**. Requiere Docker. La validación de cada revisión se registra
+en [el estado del MVP](docs/MVP-ETAPA-1-ESTADO.md).
 
 ## Restricciones conocidas
 
-- RF-003 incorporará permisos granulares y acceso por contribuyente; `ADMIN`/`CONSULTA` son roles iniciales, no la implementación final del módulo de autorización.
+- Los permisos de aplicación y la asignación por contribuyente se comprueban
+  en los servicios; el acceso directo de escritura a MySQL queda fuera de esa barrera.
 - Sin mecanismo de bloqueo temporizado por intentos fallidos ni segundo factor. Se requiere endurecimiento adicional antes de distribuir a usuarios externos.
 - La aplicación usa un cliente Swing con conexión directa a MySQL; las comprobaciones de roles en Java **no reemplazan permisos de MySQL ni constituyen autorización a prueba de un usuario con acceso directo a la BD**. Para despliegues multiusuario a través de Internet debe evaluarse un servicio intermedio.
-- Las operaciones de importación masiva, conciliación, reportes y descarga SAT permanecen fuera del alcance RF-002.
+- La descarga SAT y las determinaciones integrales de ISR o IEPS siguen fuera de
+  este MVP. Los casos tributarios sin evidencia suficiente quedan para revisión.
 - Aún requiere comprobación manual del diseñador WindowBuilder y de la UI en Windows/Linux.
 - Integraciones remotas de archivos (buckets, MEGA, Dropbox) son futuras.
 
@@ -159,3 +166,35 @@ Desde el detalle CFDI, pestaña Documentos relacionados: grafo dirigido de hasta
 
 ### RF-020 — Clasificación de operaciones
 Contabilidad → Clasificación de operaciones. Categorías propias por titular, asignación masiva con motivo y revisión, historial por UUID, y filtros históricos por emisión. Instalaciones existentes: aplicar [migración RF-020](app/database/migrations/20261117_rf020_clasificacion_operaciones.sql). Ver [RF-020](docs/RF-020.md).
+
+### MVP etapa 1 — Clasificación y papeles fiscales
+
+La clasificación detallada se abre desde **Contabilidad → Clasificación de
+operaciones**. Distribuye cada concepto entre categorías y cada impuesto entre
+tratamientos, con revisión e historial. El resumen RF-020 y la carátula de
+egresos usan la misma precedencia: el detalle sustituye la categoría general
+del concepto y el remanente permanece sin clasificar.
+
+**Contabilidad → Resumen fiscal** reúne ingresos, egresos, IVA, IEPS,
+retenciones, terceros, saldos, incidencias, tributos por categoría y orígenes. Se elige titular,
+mes o rango; Buscar carga hasta 200 registros por página. El detalle permite
+seguir resultados a CFDI, concepto, impuesto, REP y movimiento. La exportación
+CSV incluye todas las páginas con permiso vigente por lectura.
+
+**Evidencia financiera** registra cobros, pagos y ajustes en obligaciones
+existentes. Puede vincular una aplicación manual previa con un REP posterior
+sin duplicar el movimiento. El IVA de REP usa ImpuestosDR y FechaPago;
+ImpuestosP y Totales sirven para conciliar. La evidencia manual sin REP y los
+ajustes muestran pendientes, no IVA fiscal confirmado. PUE no demuestra cobro.
+La sección IEPS separa originales del CFDI, importes DR ligados a pagos y
+ajustes administrativos; no determina IEPS definitivo.
+
+RF-021 a RF-024 reutilizan el esquema vigente; **no requieren migración SQL
+adicional**. Actualice primero las migraciones anteriores en su orden y haga
+respaldo antes de actualizar instalaciones existentes. Conserve
+`hibernate.hbm2ddl.auto=validate`. Los permisos nuevos
+`OPERACIONES.CLASIFICAR_DETALLE`, `FISCAL.CONSULTAR` y
+`FISCAL.REGISTRAR_EVIDENCIA` se incorporan incrementalmente sin restaurar
+concesiones revocadas. Consulte [arquitectura](docs/ARQUITECTURA.md),
+[reglas fiscales](docs/MOTOR-FISCAL.md) y
+[estado de validación](docs/MVP-ETAPA-1-ESTADO.md).

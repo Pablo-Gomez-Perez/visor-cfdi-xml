@@ -110,3 +110,51 @@ contribuyente o de sus accesos usan Hibernate dentro de una transacción
 atómica Java SE, junto con su auditoría; no requieren JDBC masivo.
 
 Más información en [RF-004](RF-004.md).
+
+## Clasificación y auxiliares fiscales del MVP
+
+RF-021 a RF-024 reutilizan el esquema canónico. `cfdi_concepto` y las tablas
+de impuestos conservan valores importados; `clasificacion_concepto` y
+`clasificacion_impuesto_concepto` guardan decisiones vigentes. Los cambios
+anterior/resultante se registran en `bitacora_evento` y `bitacora_cambio`.
+No se agrega DDL, ni se materializa un resultado derivado permanente.
+
+`FiscalSql` define un universo acotado por titular, disponibilidad, fecha y
+filtros. `partes` da precedencia al detalle por concepto; la categoría general
+se hereda sólo sin detalle. Bases e impuestos repartidos son derivados,
+truncados a seis decimales con residuo en la última parte. Las consultas
+agregan en MySQL antes de paginar y conservan identificadores de origen.
+
+`ResumenClasificacionService` alimenta RF-020 con esa precedencia.
+`ImpuestosService` consulta originales por nivel; `ConciliacionPagosService`
+compara DR/P/Totales sin mezclarlos. `AuxiliarIvaService` reconoce por
+`FechaPago` de REP y `MotorIva` mantiene pendientes de evidencia, tratamiento
+o conciliación. `EvidenciaFinancieraService` reutiliza obligación, movimiento,
+aplicación y ajuste; la vinculación posterior de un REP añade un enlace, no
+un segundo pago. `TercerosFiscalService` reconstruye saldos por fecha y excluye
+REP cancelados sin borrar la aplicación histórica.
+
+`CaratulasService` y `ResumenFiscalService` mantienen filas de emisión y
+movimientos financieros separadas. No se suman monedas ni dimensiones.
+`ImpuestosAgrupadosService` distribuye cada parte original por tratamiento
+registrado y remanente pendiente; agrupa por tercero, categoría y firma
+tributaria sin multiplicar bases. La carátula IEPS separa fuente CFDI,
+fuente DR y ajuste administrativo; no implementa causación definitiva.
+La UI consume servicios mediante `SwingWorker`, invalida respuestas antiguas
+al cambiar filtro o titular y presenta incidencias. La exportación CSV recorre
+páginas y revalida permisos; cambios concurrentes entre páginas pueden variar
+la instantánea exportada. El motor y sus límites jurídicos se documentan en
+[MOTOR-FISCAL.md](MOTOR-FISCAL.md). El diseñador WindowBuilder debe comprobarse
+manualmente antes de integrar la PR.
+
+```mermaid
+flowchart LR
+    XML[XML original] --> CFDI[Conceptos e impuestos]
+    CFDI --> CL[Clasificaciones por titular]
+    CFDI --> REP[REP y DR originales]
+    REP --> IVA[Auxiliar IVA e incidencias]
+    CL --> CAR[Carátulas]
+    IVA --> CAR
+    MOV[Obligaciones y movimientos] --> CAR
+    CAR --> TRAZA[CFDI, concepto, impuesto y evidencia]
+```
