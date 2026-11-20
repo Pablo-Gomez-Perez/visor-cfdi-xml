@@ -278,9 +278,12 @@ class MvpFiscalServiceIT {
                     List.of(new Asignacion(costo, decimal("10000"), "Materia prima")), "");
             revision = detalle.guardar(actor, a, MIXTA, Tipo.CONCEPTO, MIXTA * 10 + 2, revision,
                     List.of(new Asignacion(gasto, decimal("2000"), "Papelería")), "Gasto de papelería");
-            detalle.guardar(actor, a, MIXTA, Tipo.CONCEPTO, MIXTA * 10 + 3, revision,
+            revision = detalle.guardar(actor, a, MIXTA, Tipo.CONCEPTO, MIXTA * 10 + 3, revision,
                     List.of(new Asignacion(inversion, decimal("15000"), "Equipo")), "Inversión de equipo");
             long tratamiento = detalle.tratamientos(actor, a).stream().filter(t -> t.clave().equals("IVA_ACREDITABLE")).findFirst().orElseThrow().id();
+            detalle.guardar(actor, a, MIXTA, Tipo.IMPUESTO, (MIXTA * 10 + 1) * 10 + 1, revision,
+                    List.of(new Asignacion(tratamiento, decimal("400"), "Tratamiento parcial sintético")),
+                    "Asignación parcial con remanente fiscal pendiente");
             detalle.guardar(actor, a, FACTURA, Tipo.IMPUESTO, (FACTURA * 10 + 1) * 10 + 1, 0,
                     List.of(new Asignacion(tratamiento, decimal("160"), "Tratamiento de prueba con evidencia")), "");
             var resumen = new ResumenFiscalService(jpa);
@@ -329,10 +332,19 @@ class MvpFiscalServiceIT {
             igual("15000", inversionResumen.filas().get(0).get(columna(inversionResumen, "Neto clasificado")));
             igual("1600", costoResumen.filas().get(0).get(columna(costoResumen, "IVA declarado distribuido")));
             var tributosCosto = resumen.consultar(actor, categoria(a, costo), Seccion.TRIBUTOS_AGRUPADOS, 0);
-            assertEquals(1, tributosCosto.filas().size());
-            igual("10000", tributosCosto.filas().get(0).get(columna(tributosCosto, "Base distribuida DERIVADA")));
-            igual("1600", tributosCosto.filas().get(0).get(columna(tributosCosto, "Impuesto distribuido DERIVADO")));
-            assertEquals("PENDIENTE", tributosCosto.filas().get(0).get(columna(tributosCosto, "Tratamiento fiscal")));
+            assertEquals(2, tributosCosto.filas().size());
+            igual("10000", tributosCosto.filas().stream()
+                    .map(f -> (BigDecimal) f.get(columna(tributosCosto, "Base distribuida DERIVADA")))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+            igual("1600", tributosCosto.filas().stream()
+                    .map(f -> (BigDecimal) f.get(columna(tributosCosto, "Impuesto distribuido DERIVADO")))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+            igual("400", tributosCosto.filas().stream()
+                    .filter(f -> "IVA_ACREDITABLE".equals(f.get(columna(tributosCosto, "Tratamiento fiscal"))))
+                    .findFirst().orElseThrow().get(columna(tributosCosto, "Impuesto distribuido DERIVADO")));
+            igual("1200", tributosCosto.filas().stream()
+                    .filter(f -> "PENDIENTE".equals(f.get(columna(tributosCosto, "Tratamiento fiscal"))))
+                    .findFirst().orElseThrow().get(columna(tributosCosto, "Impuesto distribuido DERIVADO")));
             assertTrue(resumen.consultar(actor, categoria(a, costo), Seccion.IEPS, 0).filas().isEmpty());
             var ieps = resumen.consultar(actor, junio, Seccion.IEPS, 0);
             assertEquals(1, ieps.filas().size());
