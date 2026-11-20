@@ -118,13 +118,13 @@ public final class HistorialImportacionesService {
                 FROM lote_importacion l JOIN contribuyente c ON c.id=l.contribuyente_id
                 JOIN usuario u ON u.id=l.usuario_id
                 JOIN usuario_contribuyente uc ON uc.contribuyente_id=l.contribuyente_id
-                WHERE uc.usuario_id=?1 AND l.inicio>=?2 AND l.inicio<?3
+                WHERE uc.usuario_id=?1 AND l.inicio>=CAST(?2 AS DATETIME) AND l.inicio<CAST(?3 AS DATETIME)
                 AND (?4=0 OR l.contribuyente_id=?4) AND (?5=0 OR l.usuario_id=?5)
                 AND (?6='TODOS' OR l.estado=?6)
                 ORDER BY l.inicio DESC,l.id DESC
                 """).setParameter(1,usuario)
-                .setParameter(2,Timestamp.valueOf(filtro.rango().desde().atStartOfDay()))
-                .setParameter(3,Timestamp.valueOf(filtro.rango().hasta().plusDays(1).atStartOfDay()))
+                .setParameter(2,filtro.rango().desde().atStartOfDay().toString().replace('T',' '))
+                .setParameter(3,filtro.rango().hasta().plusDays(1).atStartOfDay().toString().replace('T',' '))
                 .setParameter(4,filtro.contribuyente()).setParameter(5,filtro.importador())
                 .setParameter(6,filtro.estado().name()).setFirstResult(offset).setMaxResults(TAMANO+1));
             return pagina(datos.stream().map(f->new Lote(numero(f[0]),numero(f[1]),texto(f[2]),texto(f[3]),

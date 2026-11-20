@@ -82,12 +82,12 @@ public final class PeriodosFiscalesService {
                 + "LEFT JOIN cfdi c ON c.documento_id=d.id "
                 + (pago ? "JOIN pago_fiscal p ON p.documento_id=d.id "
                         : "LEFT JOIN documento_timbre t ON t.documento_id=d.id ")
-                + "WHERE cd.contribuyente_id=?1 AND cd.archivado_en IS NULL AND " + fecha + ">=?2 AND " + fecha + "<?3 "
+                + "WHERE cd.contribuyente_id=?1 AND cd.archivado_en IS NULL AND " + fecha + ">=CAST(?2 AS DATETIME) AND " + fecha + "<CAST(?3 AS DATETIME) "
                 + "ORDER BY " + fecha + ", d.id" + (pago ? ", p.id" : "");
             Query consulta = em.createNativeQuery(sql)
                 .setParameter(1, contribuyenteId)
-                .setParameter(2, Timestamp.valueOf(filtro.inicioInclusivo()))
-                .setParameter(3, Timestamp.valueOf(filtro.finExclusivo()))
+                .setParameter(2, filtro.inicioInclusivo().toString().replace('T',' '))
+                .setParameter(3, filtro.finExclusivo().toString().replace('T',' '))
                 .setFirstResult(pagina * MAX_PAGINA).setMaxResults(MAX_PAGINA);
             @SuppressWarnings("unchecked")
             List<Object[]> filas = consulta.getResultList();

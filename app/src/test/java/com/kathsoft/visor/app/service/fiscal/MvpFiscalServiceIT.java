@@ -620,6 +620,25 @@ class MvpFiscalServiceIT {
             var julioEjercicioAnterior = resumen.consultar(actor, julio, Seccion.IVA, 0);
             igual("16", documento(julioEjercicioAnterior, "Factura documento", 1204)
                     .get(columna(julioEjercicioAnterior, "IVA realizadoDR")));
+
+            // Medianoche civil: la zona local de la JVM no mueve una emisión o un pago al mes anterior.
+            jpa.enTransaccion(em -> {
+                comprobante(em, a, b, 1206, "I", 7, 1, "MXN", "100", "116", "PPD", "VIGENTE", true);
+                ejecutar(em, "UPDATE documento_fiscal SET fecha_emision='2026-07-01 00:00:00' WHERE id=1206");
+                iva(em, 1206, "100", "16");
+                rep(em, a, b, 2206, 1206, 7, 1, "MXN", "MXN", "116", "116", "116", "0", 1,
+                        "100", "16", "1", null, "VIGENTE", "2.0");
+                ejecutar(em, "UPDATE pago_fiscal SET fecha_pago='2026-07-01 00:00:00' WHERE documento_id=2206");
+                return null;
+            });
+            var origenesJunioFinal = resumen.consultar(actor, junio, Seccion.ORIGENES, 0);
+            assertTrue(origenesJunioFinal.filas().stream().noneMatch(f ->
+                    f.get(columna(origenesJunioFinal, "Documento")) instanceof Number n && n.longValue() == 1206));
+            assertEquals(216, operaciones.resumir(actor,
+                    new ClasificacionOperacionesService.Filtro(a, junio.desde(), junio.hasta(), "RECIBIDO", "", -1)).operaciones());
+            var ivaMedianoche = resumen.consultar(actor, julio, Seccion.IVA, 0);
+            igual("16", documento(ivaMedianoche, "Factura documento", 1206)
+                    .get(columna(ivaMedianoche, "IVA realizadoDR")));
         }
     }
 }

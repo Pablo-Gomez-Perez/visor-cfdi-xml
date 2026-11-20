@@ -3,7 +3,6 @@ package com.kathsoft.visor.app.service.fiscal;
 import com.kathsoft.visor.app.model.dto.fiscal.FiltroFiscal;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
-import java.sql.Timestamp;
 
 /** Proyecciones acotadas por titular; originales, distribuciones e impuestos se agregan en etapas separadas. */
 final class FiscalSql {
@@ -74,10 +73,13 @@ final class FiscalSql {
         )
         """;
     static Query query(EntityManager em,String sql,FiltroFiscal f){
-        Query q=em.createNativeQuery(sql);
+        // DATETIME es una fecha civil. CAST del parámetro textual evita desplazar
+        // medianoche cuando la JVM y connectionTimeZone del driver difieren.
+        Query q=em.createNativeQuery(sql.replace(":desde","CAST(:desde AS DATETIME)")
+                .replace(":hasta","CAST(:hasta AS DATETIME)"));
         if(sql.contains(":t"))q.setParameter("t",f.titular());
-        if(sql.contains(":desde"))q.setParameter("desde",Timestamp.valueOf(f.desde().atStartOfDay()));
-        if(sql.contains(":hasta"))q.setParameter("hasta",Timestamp.valueOf(f.hasta().plusDays(1).atStartOfDay()));
+        if(sql.contains(":desde"))q.setParameter("desde",f.desde().atStartOfDay().toString().replace('T',' '));
+        if(sql.contains(":hasta"))q.setParameter("hasta",f.hasta().plusDays(1).atStartOfDay().toString().replace('T',' '));
         if(sql.contains(":documento"))q.setParameter("documento",f.documento());
         if(sql.contains(":impuesto"))q.setParameter("impuesto",f.impuesto());
         if(sql.contains(":movimiento"))q.setParameter("movimiento",f.movimiento());

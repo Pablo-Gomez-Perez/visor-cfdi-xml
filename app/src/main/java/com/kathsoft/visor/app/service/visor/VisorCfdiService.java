@@ -201,7 +201,7 @@ public final class VisorCfdiService {
     }
 
     private static String condiciones(Filtro f){
-        StringBuilder s=new StringBuilder("WHERE x."+f.fecha().sql+">=:desde AND x."+f.fecha().sql+"<:hasta");
+        StringBuilder s=new StringBuilder("WHERE x."+f.fecha().sql+">=CAST(:desde AS DATETIME) AND x."+f.fecha().sql+"<CAST(:hasta AS DATETIME)");
         if(!f.uuid().isEmpty())s.append(" AND x.uuid LIKE :uuid");
         if(!f.tipo().isEmpty())s.append(" AND x.tipo=:tipo");
         if(!f.sentido().isEmpty())s.append(" AND x.sentido IN (:sentido,'AMBOS')");
@@ -220,8 +220,8 @@ public final class VisorCfdiService {
 
     private static Query parametros(Query q,Long actor,Filtro f){
         q.setParameter("actor",actor).setParameter("titular",f.titular())
-            .setParameter("desde",Timestamp.valueOf(f.desde().atStartOfDay()))
-            .setParameter("hasta",Timestamp.valueOf(f.hasta().plusDays(1).atStartOfDay()));
+            .setParameter("desde",f.desde().atStartOfDay().toString().replace('T',' '))
+            .setParameter("hasta",f.hasta().plusDays(1).atStartOfDay().toString().replace('T',' '));
         if(!f.uuid().isEmpty())q.setParameter("uuid",f.uuid().toUpperCase(Locale.ROOT)+"%");
         if(!f.tipo().isEmpty())q.setParameter("tipo",f.tipo());
         if(!f.sentido().isEmpty())q.setParameter("sentido",f.sentido());

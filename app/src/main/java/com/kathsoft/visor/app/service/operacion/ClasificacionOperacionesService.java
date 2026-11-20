@@ -187,7 +187,7 @@ public final class ClasificacionOperacionesService {
                     WHERE hh.contribuyente_id=cd.contribuyente_id AND hh.documento_id=d.id ORDER BY hh.id DESC LIMIT 1)
                 LEFT JOIN categoria_operacion cat ON cat.id=h.categoria_id AND cat.contribuyente_id=cd.contribuyente_id
                 WHERE cd.contribuyente_id=:t AND cd.archivado_en IS NULL AND c.tipo IN ('I','E','N')
-                    AND d.fecha_emision>=:desde AND d.fecha_emision<:hasta
+                    AND d.fecha_emision>=CAST(:desde AS DATETIME) AND d.fecha_emision<CAST(:hasta AS DATETIME)
 
                 """;
         if(!f.sentido().isEmpty())sql+=" AND (cd.sentido=:sentido OR cd.sentido='AMBOS')";
@@ -199,8 +199,8 @@ public final class ClasificacionOperacionesService {
 
     private static Query parametrosFiltro(EntityManager em,String sql,Filtro f){
         Query q=em.createNativeQuery(sql)
-            .setParameter("t",f.titular()).setParameter("desde",Timestamp.valueOf(f.desde().atStartOfDay()))
-            .setParameter("hasta",Timestamp.valueOf(f.hasta().plusDays(1).atStartOfDay()));
+            .setParameter("t",f.titular()).setParameter("desde",f.desde().atStartOfDay().toString().replace('T',' '))
+            .setParameter("hasta",f.hasta().plusDays(1).atStartOfDay().toString().replace('T',' '));
         if(sql.contains(":documento"))q.setParameter("documento",0L);
         if(!f.sentido().isEmpty())q.setParameter("sentido",f.sentido());
         if(!f.rfc().isEmpty())q.setParameter("rfc",f.rfc()+"%");
