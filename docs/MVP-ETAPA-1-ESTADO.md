@@ -1,119 +1,72 @@
-# MVP etapa 1 — Seguimiento de ingeniería
+# MVP etapa 1 — Estado de ingeniería
 
-## Base comprobada
+## Base y publicación
 
-- Base: `d4263d86348c00e6896f0bdabfe48bae08ea395f`, `main` limpio al comenzar.
+- Base `main`: `d4263d86348c00e6896f0bdabfe48bae08ea395f`.
 - Rama: `feat/mvp-etapa-1-clasificacion-fiscal`.
-- PR #20 integrada; conserva SplitPane, edición reutilizable, atajos, historial y resumen RF-020.
-- `git fetch origin` falló por autenticación SSH. La consulta HTTPS de `main` confirmó el mismo commit.
-- No había PR abiertas al inspeccionar GitHub.
-- CI heredado de RF-020: ejecución `44489981223`, fallida. Causa comprobada: el test insertaba RECIBIDO para el titular emisor. Corregido en `aaaf420`, conservando el trigger.
-- Referencia Excel disponible: se inspeccionaron únicamente estructura y familias de fórmulas. Hojas EGRESOS, REP, Hoja1 y Hoja2. No se incorporan datos privados.
+- [PR #21](https://github.com/Pablo-Gomez-Perez/visor-cfdi-xml/pull/21), borrador contra `main`; no fusionada.
+- RF-020 y su experiencia de usuario estaban integrados en la base. Se ampliaron, no se reconstruyeron.
+- La rama se publicó mediante el conector GitHub porque el transporte Git local carece de credenciales de escritura. Los SHA de algunos commits equivalentes difieren por metadatos; sus árboles coinciden. El último cambio funcional remoto es `08e8b9a`.
+- La hoja `06-EGRESOS JUNIO.xlsx` se inspeccionó sólo como referencia de estructura y fórmulas. No se publicaron datos privados.
 
 ## Matriz de implementación
 
-| Fase | Estado | Resultado verificable |
+| Fase | Estado | Evidencia |
 |---|---|---|
-| 0. Inspección | Completada | Base, capas, esquema, rutinas y documentación revisados |
-| 1. RF-021 | Implementada; revisión final en CI | Distribuciones, tratamientos, revisión, historial, RF-020 e interfaz |
-| 2. RF-022 | Implementada; revisión final en CI | Cinco niveles originales y conciliación concepto/global/totales y DR/P/Totales |
-| 3. RF-023 | Implementada con límites jurídicos; revisión final en CI | REP por FechaPago, manual pendiente, parcialidades y vinculación posterior sin duplicar |
-| 4. RF-024 | Implementada; revisión final en CI | Terceros, obligaciones, aplicaciones, ajustes y saldos históricos |
-| 5. Carátulas | Integradas; revisión final en CI | Ingresos, egresos, IVA, IEPS documental, retenciones, trazabilidad y CSV |
-| 6–7. Integración y pruebas | En curso | 112 unitarias locales; CI MySQL anterior satisfactorio; revisión actual pendiente |
-| 8. Documentación | En curso | Reglas, arquitectura, UI, roles y estado actualizados |
-| 9. Publicación | PR borrador creada | Rama publicada por GitHub; sin fusionar |
+| 0. Inspección | Completa | Esquema, documentación, PR #20, seguridad, servicios y Swing revisados. |
+| 1. RF-021 | Implementada y probada | Clasificación mixta y parcial por concepto/impuesto, precedencia, revisión, historial, diálogo integrado con RF-020. |
+| 2. RF-022 | Implementada y probada | Originales por concepto, global, DR, P y Totales; conciliación y agrupación SQL con rastro. |
+| 3. RF-023 | Implementada con límites jurídicos visibles | IVA documental/realizado/tratamiento; REP por FechaPago, manual pendiente, parcialidades, otras monedas, ajustes, cancelaciones e incidencias. |
+| 4. RF-024 | Implementada y probada | Terceros, obligaciones, aplicaciones, movimientos, ajustes y saldos documentados históricos. |
+| 5. Carátulas | Integradas y probadas | Ingresos, egresos, IVA, IEPS documental, ISR/retenciones, terceros, incidencias, detalle y CSV. |
+| 6–7. Integración y pruebas | Completas en Maven/CI | 113 unitarias y 16 integraciones; escenario integral, EXPLAIN sintético y regresión de zona horaria. |
+| 8. Documentación | Actualizada | RF-021 a RF-024, MOTOR-FISCAL, arquitectura, UI, seguridad, README y este estado. |
+| 9. Publicación | PR borrador publicada | Revisión manual de WindowBuilder pendiente; no marcar lista ni fusionar. |
 
-## Decisiones e invariantes
+No quedan funciones obligatorias simuladas ni métodos `TODO` dentro de esta etapa. La verificación visual real con WindowBuilder es la única comprobación del Definition of Done pendiente en el entorno disponible.
 
-1. Reutilizar `clasificacion_concepto`, `clasificacion_impuesto_concepto`, `tratamiento_impuesto`, `obligacion`, `movimiento_pago`, `aplicacion_pago` y `ajuste_obligacion`.
-2. Mantener originales independientes de distribuciones, evidencia y cálculos. `BigDecimal`/`DECIMAL`; no mezclar monedas.
-3. Distribución detallada sustituye la categoría general para el concepto completo, incluido su remanente pendiente. Sin detalle se hereda la categoría general. Nunca sumar ambos.
-4. Guardar distribuciones en una transacción, bloquear vínculo documental y exigir revisión visible. Auditoría anterior/resultante en las estructuras existentes.
-5. PUE no acredita pago. ImpuestosDR son fuente de detalle REP; ImpuestosP/Totales sólo concilian. FechaPago determina el periodo del auxiliar financiero.
-6. Estado SAT desconocido, cancelaciones, sustituciones, falta de evidencia y reglas no verificadas generan revisión, nunca certeza fiscal artificial.
-7. Servicios revalidan permisos efectivos y asignación explícita. SwingWorker y protección contra respuestas obsoletas.
+## Decisiones arquitectónicas
 
-## Persistencia y riesgos detectados
+1. Se reutilizaron `clasificacion_concepto`, `clasificacion_impuesto_concepto`, `tratamiento_impuesto`, `obligacion`, `movimiento_pago`, `aplicacion_pago`, `ajuste_obligacion` y la bitácora. Originales XML, clasificación, evidencia y derivados permanecen separados.
+2. La distribución detallada sustituye la clasificación general del concepto, incluso para el remanente pendiente. Sin detalle, la categoría general sirve de predeterminado. Nunca se suman ambos importes.
+3. Las distribuciones se validan con `BigDecimal`, se guardan atómicamente con revisión documental y bloqueo, y generan historial anterior/resultante. Un cambio sin efecto no crea evento.
+4. `ImpuestosDR` es fuente del detalle fiscal del REP; `ImpuestosP` y `Totales` concilian. No se suman los tres. `FechaPago` define el periodo financiero. PUE sin evidencia no confirma cobro o pago.
+5. Las carátulas separan emisión, realización financiera, tratamientos y pendientes. No suman monedas diferentes ni presentan ISR o IEPS definitivos. Estado SAT desconocido, cancelación, sustitución, falta de evidencia o diferencias generan incidencias.
+6. Los servicios revalidan permiso y asignación explícita al contribuyente. Los nuevos permisos se incorporan incrementalmente, sin restaurar revocaciones.
+7. Los filtros MySQL `DATETIME` enlazan límites civiles como texto ISO con `CAST(... AS DATETIME)`. Esto preserva la medianoche aunque la JVM use `America/Mexico_City` y JDBC UTC.
+8. Swing usa paneles `JPanel`/diálogos `JDialog`, `GroupLayout`, constructores públicos sin argumentos y `SwingWorker` con descarte de respuestas obsoletas. No se accede a JPA en constructores ni renderizadores.
 
-- Tablas de distribuciones existentes carecen revisión e historial especializado y límites agregados; se reutilizan con revisión documental y snapshots en bitacora_evento/bitacora_cambio. No requieren DDL adicional.
-- `v_saldo_obligacion` representa toda la historia, no un cierre histórico. Se requieren cortes por fechas.
-- REP referencia UUID sin FK a factura; comprobar disponibilidad del mismo titular.
-- Vinculación manual/REP puede duplicar evidencia si no se concilia explícitamente.
-- `efecto_fiscal_periodo` no contiene moneda ni fuente suficiente; no usar para materializar resultados derivados sin invalidación.
-- No se ha modificado esquema, rutina ni base operativa.
+## Persistencia y archivos modificados
 
-## Verificación y errores
+- No hay DDL ni procedimientos nuevos. La etapa usa el esquema canónico y las migraciones anteriores; `hibernate.hbm2ddl.auto=validate` permanece. No se ejecutaron migraciones sobre datos de usuario.
+- Persistencia: entidades JPA existentes mapeadas para clasificaciones, obligaciones, movimientos, aplicaciones y ajustes; `persistence.xml` amplía el registro.
+- Negocio: `app/src/main/java/com/kathsoft/visor/app/service/fiscal/` contiene distribución, impuestos, conciliación, IVA, evidencia, terceros, carátulas y exportación.
+- Seguridad: `Permisos`, bootstrap incremental de `UsuariosService`, `AccesoFiscal`.
+- UI: `Fr_DatosClasificacionDetalle`, `Fr_DatosEvidencia`, `PanelResumenFiscal`; integración con `PanelClasificacionOperaciones` y `Fr_Principal`.
+- Pruebas: `app/src/test/java/com/kathsoft/visor/app/service/fiscal/` y regresiones de importación, operación y UI.
+- Documentos: `README.md`, `docs/ARQUITECTURA.md`, `docs/UI-SWING-WINDOWBUILDER.md`, `docs/RF-003.md`, `docs/RF-020.md`, `docs/RF-021.md` a `docs/RF-024.md`, `docs/MOTOR-FISCAL.md` y este seguimiento.
 
-- Comando obligatorio iniciado: `mvn --batch-mode --no-transfer-progress -f app/pom.xml verify`.
-- Primer intento bloqueado por caché Maven fuera del sandbox; reejecutado con permisos de entorno.
-- Docker no está instalado (`docker: command not found`): integración Testcontainers no ejecutable actualmente.
-- Diseñador Eclipse WindowBuilder: pendiente; no se declara compatibilidad comprobada.
+## Verificación y correcciones
+
+- Comando local exacto: `mvn --batch-mode --no-transfer-progress -f app/pom.xml verify` — **BUILD SUCCESS**, 113 unitarias, 16 integraciones Testcontainers MySQL 8, cero fallas y tres integraciones XSD omitidas por faltar el espejo XSD local. Duración 05:31 min; 19-11-2026, zona México.
+- [GitHub Actions 44678765691](https://github.com/Pablo-Gomez-Perez/visor-cfdi-xml/actions/runs/44678765691) — **BUILD SUCCESS**, 113 unitarias y 16 integraciones, cero omisiones; instala XSD SAT desde revisión fija. Duración 04:00 min; 20-11-2026 UTC.
+- Escenario MySQL sintético de dos meses: CFDI mixtos, IVA 16/0/exento, IEPS, retenciones, PUE/PPD, pagos 80 + 80 en meses distintos, factura de ejercicio anterior, otras monedas, ajustes, cancelación, sustitución, dos titulares y más de una página. Comprueba que el IVA original de 160 no se duplica; importes y trazas se contrastan con expectativas independientes.
+- Pruebas de permisos, revocación, aislamiento, rollback, concurrencia y agrupación tributaria parcial. EXPLAIN se ejecutó sobre datos sintéticos; no equivale a benchmark de producción con decenas de miles de CFDI.
+- Fallas corregidas durante CI: sentido incorrecto de un CFDI sintético RF-020, expresión SQL `:categoriaGROUP`, residuos monetarios por `HALF_UP`, firma de retenciones DR/P, `ObjetoImp` ausente en 3.3 y límites civiles `DATETIME` desplazados por la zona horaria. También se corrigieron enlace manual/REP duplicado y trazabilidad de facturas de meses anteriores.
+- `git diff --check` sin problemas. Las pruebas Swing cubren construcción sin persistencia, acciones, permisos y respuestas asíncronas; no sustituyen abrir los formularios en Eclipse Design.
+
+## Riesgos y límites visibles
+
+- Eclipse Snap inicia, pero WindowBuilder no está instalado en Snap ni en `~/.p2`. Falta abrir los formularios en **Design** y comprobar edición y tamaños 900×700 y 740×490. No se declara compatibilidad visual comprobada.
+- Los saldos históricos dependen de movimientos y obligaciones disponibles; ausencia de historia no equivale a saldo inicial cero. `v_saldo_obligacion` no representa cierres históricos por sí misma.
+- Un REP puede referir UUID sin FK a factura; el servicio valida disponibilidad del titular. La vinculación manual y REP requiere conciliación explícita para evitar doble evidencia.
+- El último estado SAT almacenado no reconstruye el estado legal en cada fecha histórica. Los casos sin desglose tributario, tipo de cambio o fundamento aplicable quedan pendientes de revisión profesional.
+- `efecto_fiscal_periodo` no tiene moneda ni fuente suficientes para materializar esta etapa sin política de invalidación. Los resultados se calculan desde originales, clasificaciones y evidencia.
+- Exportación CSV pagina y revalida acceso; cambios concurrentes entre páginas pueden variar el corte. Se recomienda exportar con operaciones de carga quietas.
+- ISR por régimen e IEPS definitivo están fuera de alcance, según `docs/MOTOR-FISCAL.md`. Ninguna carátula se presenta como declaración definitiva.
 
 ## Próxima actividad
 
-Completar diagnóstico CI y normativo; implementar RF-021 reutilizando tablas existentes y documentar migración, pruebas y limitaciones reales.
-
-## Continuidad tras interrupción del servidor
-
-Se recuperó el árbol de trabajo sin sobrescribir cambios. El intento de publicación no alcanzó a ejecutarse antes de la interrupción. Tras retomarlo, HTTPS rechazó el push por falta de credenciales. Se utilizará el conector GitHub para publicar si mantiene acceso.
-
-## Avance técnico comprobado
-
-- Entidades JPA para distribuciones, obligaciones, movimientos, aplicaciones y ajustes sobre tablas existentes; `validate` conservado.
-- Servicio RF-021 con lectura actual bloqueante de revisión para evitar el snapshot obsoleto de MySQL REPEATABLE READ; orden canónico evita historial de no-ops.
-- Editor de conceptos/tratamientos integrado con RF-020. Se conserva SplitPane y sus acciones.
-- Proyecciones RF-022 por nivel original y conciliación de conceptos/globales/totales.
-- Auxiliar REP con controles acumulados y motor puro de IVA; manuales y consolidación adicional todavía en revisión.
-- Servicios de evidencia y saldos históricos; revisión detectó cruces de titular en REP/ajustes compartidos y obligación heredada incompatible. Correcciones en curso con pruebas específicas pendientes.
-- PanelResumenFiscal con filtros explícitos, pestañas, paginación, detalle y CSV; pendiente prueba integral.
-- Pruebas unitarias anteriores al último lote: 90 satisfactorias. Nuevas pruebas detectaron regex de moneda permisiva, ya corregida. Nueva ejecución en curso.
-- Maven verify local falla por Docker ausente. Pruebas Swing requieren `java.awt.headless=true` porque DISPLAY apunta a X11 inaccesible; se configuró Surefire sin omitir pruebas.
-
-Próxima actividad: validar compilación y navegación, completar agregación IVA/manuales, ejecutar escenario MySQL en CI, corregir incidencias y documentar límites reales.
-
-## Validación remota y correcciones de integración
-
-- PR borrador: https://github.com/Pablo-Gomez-Perez/visor-cfdi-xml/pull/21. No se ha fusionado.
-- CI `44671133327`: Maven verify satisfactorio para RF-021/022 y regresión RF-020.
-- CI `44671650580` sobre `58f3a84`: Maven verify satisfactorio para integración inicial completa, incluyendo escenario MySQL de dos meses, pagos 80 + 80, saldos, permisos, monedas y EXPLAIN sintético.
-- La revisión posterior detectó y corrigió: residuos tributarios negativos por HALF_UP; ausencia de ObjetoImp en CFDI 3.3; reutilización de detalle anterior tras fallo de consulta Swing; trazabilidad por emisión que omitía facturas anteriores pagadas; firma de retención DR/P incompatible.
-- El resumen RF-020 ahora consume la misma precedencia de distribuciones, preservando su universo y conteos documentales.
-- Nuevas carátulas separan ingresos/egresos por emisión y movimientos financieros, incluyendo facturas de meses anteriores. IVA documental, realizado, potencial, tratamiento y pendientes se mantienen separados.
-- Se añadieron regresiones para los fallos encontrados. Deben volver a pasar CI antes de considerar consolidada esta revisión.
-- Publicación mediante conector GitHub: conserva commits atómicos y el mismo contenido. Sus identificadores difieren de los locales por metadatos del commit; se reconciliará el historial sin force push.
-
-## Revisión 0729746 / a48e8b9
-
-- Commit local `0729746`, remoto equivalente `a48e8b9`: carátulas por origen
-  temporal, RF-020 con distribución detallada, controles REP/cancelación,
-  conciliación de retenciones, vínculo manual previo con DR posterior y
-  regresiones sobre residuos y CFDI 3.3. No se cambió el esquema.
-- `mvn --batch-mode --no-transfer-progress -f app/pom.xml test`: 112 pruebas,
-  cero fallos. `git diff --check`: sin problemas de espacios.
-- CI `44673872992` ejecutó `Maven verify` con MySQL 8 y concluyó
-  `BUILD SUCCESS`: 112 unitarias y 16 pruebas de integración;
-  `MvpFiscalServiceIT` terminó sin fallas y ejecutó EXPLAIN sintético.
-- El escenario nuevo verifica enlace manual/REP sin duplicar aplicación,
-  aislamiento por titular y factura de ejercicio anterior pagada en 2026.
-- Documentación obligatoria se actualiza sin declarar validación visual de
-  WindowBuilder. Pendiente revisar consistencia final tras CI.
-
-Próxima actividad: resolver el resultado de CI, cerrar brechas funcionales
-comprobadas, documentar límites, reconciliar historia Git local y remota y
-actualizar PR #21. No fusionar ni marcar lista con WindowBuilder pendiente.
-
-## Extensión tributaria d5361ce / 71133c1
-
-- `ImpuestosAgrupadosService` cruza distribuciones por concepto y tratamiento
-  en agregados SQL. Conserva remanente pendiente y residuos a seis decimales.
-- Carátula IEPS separa CFDI original, IEPS DR de REP y ajustes administrativos;
-  no convierte ninguna de esas fuentes en IEPS definitivo.
-- Las pestañas y el rastro del DR se integraron al mismo `PanelResumenFiscal`.
-- `mvn --batch-mode --no-transfer-progress -f app/pom.xml test`: 113
-  unitarias satisfactorias. CI MySQL para `71133c1` aún pendiente.
-- Fuentes oficiales LIEPS y LISR verificadas; límites documentados.
-
-Próxima actividad: esperar `Maven verify` de `71133c1`, corregir cualquier
-falla SQL, confirmar integración y actualizar la PR. Validación real de
-WindowBuilder continúa pendiente en este entorno.
+1. Publicar este cierre documental y actualizar cuerpo de PR #21 con matriz, CI, instalación y límites.
+2. Abrir los formularios en Eclipse con WindowBuilder instalado y verificar edición visual y resoluciones. Registrar resultado antes de marcar la PR lista para revisión final.
+3. Revisar la PR y fusionar sólo mediante autorización del responsable; esta orden no autoriza fusión.

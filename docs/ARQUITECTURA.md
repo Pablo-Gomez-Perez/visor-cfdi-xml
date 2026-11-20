@@ -140,6 +140,9 @@ movimientos financieros separadas. No se suman monedas ni dimensiones.
 registrado y remanente pendiente; agrupa por tercero, categoría y firma
 tributaria sin multiplicar bases. La carátula IEPS separa fuente CFDI,
 fuente DR y ajuste administrativo; no implementa causación definitiva.
+Los intervalos de `DATETIME` son fechas civiles: se enlazan como texto ISO
+y se convierten en MySQL, sin desplazar medianoche por una diferencia entre
+zona de la JVM y `connectionTimeZone=UTC`. La regresión cubre México y UTC.
 La UI consume servicios mediante `SwingWorker`, invalida respuestas antiguas
 al cambiar filtro o titular y presenta incidencias. La exportación CSV recorre
 páginas y revalida permisos; cambios concurrentes entre páginas pueden variar

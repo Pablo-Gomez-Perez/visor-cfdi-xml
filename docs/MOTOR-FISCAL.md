@@ -146,6 +146,10 @@ regla jurídica y evidencia específica antes de afectar una declaración.
 
 Se distinguen emisión, FechaPago, fecha de ajuste y periodo consultado. Los
 resultados conservan identificadores de factura, REP, nodo Pago, DR e impuesto.
+Los filtros de columnas MySQL `DATETIME` enlazan los límites civiles como
+texto ISO y los convierten en SQL mediante `CAST(... AS DATETIME)`. Así una
+medianoche del mes no cambia de periodo por la zona horaria de la JVM o la
+configuración UTC de JDBC. Las fechas originales conservan su valor.
 Los documentos archivados quedan fuera de disponibilidad operativa; archivado
 no significa cancelación. Estados no vigentes, desconocidos, errores o ausencia
 de consulta no pasan a confirmación fiscal.
