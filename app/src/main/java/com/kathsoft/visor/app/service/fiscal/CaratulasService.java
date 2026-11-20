@@ -81,7 +81,7 @@ public final class CaratulasService {
                 FROM universo u JOIN conceptos cc ON cc.documento_id=u.documento_id
                 JOIN cfdi_concepto_impuesto i ON i.concepto_id=cc.id
                 WHERE u.tipo IN ('I','E','N') AND i.impuesto='003'
-                """+FiscalSql.filtros(f,"u")+FiscalSql.impuestos(f,"i")+"""
+                """+FiscalSql.filtros(f,"u")+FiscalSql.impuestos(f,"i")+" " +"""
                 GROUP BY u.sentido,u.tipo,u.moneda,u.estado_sat,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota
                 UNION ALL
                 SELECT factura.sentido,'P',pd.moneda,rep.estado_sat,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota,
@@ -96,7 +96,7 @@ public final class CaratulasService {
                 JOIN activos factura ON factura.documento_id=df.id AND factura.tipo='I'
                 WHERE p.fecha_pago>=:desde AND p.fecha_pago<:hasta AND i.impuesto='003'
                 """+FiscalSql.filtros(f.sinMoneda(),"factura")
-                    +(f.moneda().isEmpty()?"":" AND pd.moneda=:moneda")+FiscalSql.impuestos(f,"i")+"""
+                    +(f.moneda().isEmpty()?"":" AND pd.moneda=:moneda")+FiscalSql.impuestos(f,"i")+" " +"""
                 GROUP BY factura.sentido,pd.moneda,rep.estado_sat,factura.estado_sat,
                   i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota
                 UNION ALL
@@ -108,7 +108,7 @@ public final class CaratulasService {
                 WHERE factura.tipo='I' AND a.fecha_ajuste>=DATE(:desde) AND a.fecha_ajuste<DATE(:hasta)
                   AND EXISTS(SELECT 1 FROM cfdi_concepto cc JOIN cfdi_concepto_impuesto ci ON ci.concepto_id=cc.id
                     WHERE cc.documento_id=factura.documento_id AND ci.impuesto='003')
-                """+FiscalSql.filtros(f,"factura")+sinFirmaAjuste+"""
+                """+FiscalSql.filtros(f,"factura")+sinFirmaAjuste+" " +"""
                 GROUP BY factura.sentido,o.moneda,factura.estado_sat
                 ORDER BY 16,1,2,3,4,5,6,7,8
                 """;

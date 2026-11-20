@@ -333,6 +333,7 @@ class MvpFiscalServiceIT {
             igual("10000", tributosCosto.filas().get(0).get(columna(tributosCosto, "Base distribuida DERIVADA")));
             igual("1600", tributosCosto.filas().get(0).get(columna(tributosCosto, "Impuesto distribuido DERIVADO")));
             assertEquals("PENDIENTE", tributosCosto.filas().get(0).get(columna(tributosCosto, "Tratamiento fiscal")));
+            assertTrue(resumen.consultar(actor, categoria(a, costo), Seccion.IEPS, 0).filas().isEmpty());
             var ieps = resumen.consultar(actor, junio, Seccion.IEPS, 0);
             assertEquals(1, ieps.filas().size());
             assertEquals("Cuota", ieps.filas().get(0).get(columna(ieps, "Factor")));

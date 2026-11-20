@@ -78,7 +78,7 @@ public final class ImpuestosAgrupadosService {
                 WHERE 1=1
                 """+FiscalSql.filtros(f,"u")+FiscalSql.impuestos(f,"c")
                     +(!f.naturaleza().isEmpty()?" AND c.naturaleza=:naturaleza":"")
-                    +(f.categoria()>0?" AND c.categoria_id=:categoria":"")+"""
+                    +(f.categoria()>0?" AND c.categoria_id=:categoria":"")+" " +"""
                 GROUP BY u.rfc_tercero,u.nombre_tercero,u.sentido,u.tipo,u.moneda,u.estado_sat,
                   c.naturaleza,c.categoria,c.categoria_id,c.impuesto,c.movimiento,c.tipo_factor,c.tasa_cuota,c.tratamiento
                 ORDER BY u.rfc_tercero,c.naturaleza,c.categoria,c.impuesto,c.movimiento,c.tipo_factor,c.tasa_cuota,c.tratamiento
