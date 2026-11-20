@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
+import java.math.BigDecimal;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -44,6 +45,13 @@ class ClasificacionOperacionesServiceIT {
     private static Seleccion sel(Operacion o){return new Seleccion(o.id(),o.revision());}
     private static Filtro filtro(long t,long cat){
         return new Filtro(t,LocalDate.of(2026,6,1),LocalDate.of(2026,6,30),"RECIBIDO","",cat);
+    }
+    private static void decimal(String esperado,BigDecimal actual){assertEquals(0,new BigDecimal(esperado).compareTo(actual));}
+    private static void concepto(EntityManager em,long doc,long id,int ordinal,int importe,String objeto,int descuento){
+        ejecutar(em,"INSERT INTO cfdi_concepto(id,documento_id,ordinal,clave_prod_serv,cantidad,clave_unidad,descripcion,valor_unitario,importe,descuento,objeto_impuesto) VALUES (?1,?2,?3,'01010101',1,'H87','Concepto sintético',?4,?4,?5,?6)",id,doc,ordinal,importe,descuento,objeto);
+    }
+    private static void iva(EntityManager em,long id,int ordinal,int base,String factor,BigDecimal tasa,BigDecimal importe){
+        ejecutar(em,"INSERT INTO cfdi_concepto_impuesto(concepto_id,movimiento,ordinal,impuesto,tipo_factor,base,tasa_cuota,importe) VALUES (?1,'TRASLADO',?2,'002',?3,?4,?5,?6)",id,ordinal,factor,base,tasa,importe);
     }
     @Test void catalogoHistorialReclasificacionAislamientoYAtomicidad()throws Exception{
         var migracion=MYSQL.execInContainer("sh","-ec","""
@@ -122,6 +130,61 @@ class ClasificacionOperacionesServiceIT {
             assertThrows(SecurityException.class,()->s.crearPredeterminadas(lector,a));
             assertEquals(4L,jpa.<Long>consultar(em->numero(em,"SELECT COUNT(*) FROM clasificacion_operacion_evento")).longValue());
             assertEquals(0L,jpa.<Long>consultar(em->numero(em,"SELECT COUNT(*) FROM clasificacion_concepto")).longValue());
+
+            // Conservar los casos previos y añadir suficientes documentos para superar una página.
+            assertTrue(s.cambiarEstadoCategoria(actor,a,costo,true));
+            jpa.enTransaccion(em->{
+                for(int i=1;i<=104;i++){
+                    long id=970000+i;
+                    String uuid="123e4567-e89b-12d3-a456-"+String.format("%012d",id);
+                    ejecutar(em,"INSERT INTO documento_fiscal(id,clase,uuid,version_estandar,fecha_emision) VALUES (?1,'CFDI',?2,'4.0','2026-06-29 12:00:00')",id,uuid);
+                    ejecutar(em,"INSERT INTO cfdi(documento_id,tipo,moneda,subtotal,total) VALUES (?1,?2,?3,100,116)",id,i==103?"E":"I",i==104?"USD":"MXN");
+                    ejecutar(em,"INSERT INTO documento_participante(documento_id,rol,rfc) VALUES (?1,'E','AAA010101AAA'),(?1,'R','BBB010101BBB')",id);
+                    ejecutar(em,"INSERT INTO contribuyente_documento(contribuyente_id,documento_id,sentido) VALUES (?1,?2,'RECIBIDO')",a,id);
+                    if(i!=101){
+                        concepto(em,id,id*10,1,100,"02",0);
+                        iva(em,id*10,1,100,"Tasa",new BigDecimal("0.16"),new BigDecimal("16"));
+                    }else{
+                        concepto(em,id,id*10,1,45,"02",5);
+                        iva(em,id*10,1,40,"Tasa",new BigDecimal("0.16"),new BigDecimal("6.4"));
+                        concepto(em,id,id*10+1,2,20,"02",0);
+                        iva(em,id*10+1,1,20,"Tasa",BigDecimal.ZERO,BigDecimal.ZERO);
+                        concepto(em,id,id*10+2,3,10,"02",0);
+                        ejecutar(em,"INSERT INTO cfdi_concepto_impuesto(concepto_id,movimiento,ordinal,impuesto,tipo_factor,base) VALUES (?1,'TRASLADO',1,'002','Exento',10)",id*10+2);
+                        concepto(em,id,id*10+3,4,10,"01",0);
+                        concepto(em,id,id*10+4,5,10,"03",0);
+                        concepto(em,id,id*10+5,6,10,"02",0);
+                        iva(em,id*10+5,1,5,"Tasa",new BigDecimal("0.16"),new BigDecimal("0.8"));
+                        iva(em,id*10+5,2,5,"Tasa",new BigDecimal("0.16"),new BigDecimal("0.8"));
+                        // Retenciones y otros impuestos no multiplican las bases IVA.
+                        ejecutar(em,"INSERT INTO cfdi_concepto_impuesto(concepto_id,movimiento,ordinal,impuesto,tipo_factor,base,tasa_cuota,importe) VALUES (?1,'RETENCION',1,'002','Tasa',40,0.04,1.6),(?1,'TRASLADO',2,'003','Tasa',40,0.03,1.2)",id*10);
+                    }
+                }
+                ejecutar(em,"UPDATE cfdi SET descuento=5,subtotal=105,total=108 WHERE documento_id=970101");
+                ejecutar(em,"INSERT INTO consulta_estado_sat(documento_id,estado,fecha_consulta) VALUES (970102,'VIGENTE','2026-06-29 12:30:00'),(970102,'CANCELADO','2026-06-30 12:30:00')");
+                return null;
+            });
+            var nuevos=java.util.stream.LongStream.rangeClosed(970001,970104).mapToObj(id->new Seleccion(id,0)).toList();
+            assertEquals(100,s.clasificar(actor,a,nuevos.subList(0,100),costo,"Inicial"));
+            assertEquals(4,s.clasificar(actor,a,nuevos.subList(100,104),costo,"Inicial"));
+            assertEquals(100,s.consultar(actor,filtro(a,costo),0).filas().size());
+            assertEquals(4,s.consultar(actor,filtro(a,costo),1).filas().size());
+            var resumen=s.resumir(actor,filtro(a,costo));
+            assertEquals(104,resumen.operaciones());assertEquals(104,resumen.clasificadas());assertEquals(0,resumen.pendientes());
+            assertEquals(4,resumen.grupos().size());
+            var g=resumen.grupos().stream().filter(x->x.tipo().equals("I")&&x.moneda().equals("MXN")&&x.estadoSat().equals("SIN_CONSULTA")).findFirst().orElseThrow();
+            assertEquals(101,g.documentos());
+            decimal("10100",g.subtotalNeto());decimal("10040",g.tasa16());decimal("20",g.tasa0());
+            decimal("10",g.exento());decimal("10",g.noObjeto());decimal("10",g.sinIvaDesglosado());
+            decimal("10",g.revisar());decimal("1608",g.ivaTrasladado());decimal("0",g.diferencia());
+            assertTrue(resumen.grupos().stream().anyMatch(x->x.estadoSat().equals("CANCELADO")&&x.documentos()==1));
+            assertTrue(resumen.grupos().stream().anyMatch(x->x.tipo().equals("E")&&x.documentos()==1));
+            assertTrue(resumen.grupos().stream().anyMatch(x->x.moneda().equals("USD")&&x.documentos()==1));
+            assertEquals(106,s.resumir(actor,filtro(a,-1)).operaciones());
+            assertEquals(1,s.resumir(actor,filtro(a,0)).pendientes());
+            decimal("100",s.resumir(actor,filtro(a,0)).grupos().get(0).sinConceptos());
+            assertEquals(0,s.resumir(actor,new Filtro(a,LocalDate.of(2026,7,1),LocalDate.of(2026,7,31),"","",-1)).operaciones());
+            assertThrows(SecurityException.class,()->s.resumir(lector,filtro(b,-1)));
         }
     }
 }
