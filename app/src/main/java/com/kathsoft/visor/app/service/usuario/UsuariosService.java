@@ -97,6 +97,15 @@ public final class UsuariosService {
     /** @return visor general RF-015/016 sobre el contexto compartido */
     public ClasificacionOperacionesService operaciones() {return new ClasificacionOperacionesService(jpa);}
 
+    /** @return papeles de trabajo fiscales RF-021 a RF-024 */
+    public com.kathsoft.visor.app.service.fiscal.ResumenFiscalService resumenFiscal() { return new com.kathsoft.visor.app.service.fiscal.ResumenFiscalService(jpa); }
+
+    /** @return registro de evidencia financiera sobre obligaciones existentes */
+    public com.kathsoft.visor.app.service.fiscal.EvidenciaFinancieraService evidenciaFinanciera() { return new com.kathsoft.visor.app.service.fiscal.EvidenciaFinancieraService(jpa); }
+
+    /** @return distribuciones RF-021 sobre el contexto compartido */
+    public com.kathsoft.visor.app.service.fiscal.ClasificacionDetalleService clasificacionDetalle() { return new com.kathsoft.visor.app.service.fiscal.ClasificacionDetalleService(jpa); }
+
     /** @return visor documental RF-015/016 */
     public VisorCfdiService visorCfdi() {return new VisorCfdiService(jpa);}
 

@@ -50,6 +50,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 	private JSpinner spAnio, spMes;
 	private JFormattedTextField txfDesde, txfHasta;
 	private JTextField txfRfc;
+	private JButton btnConceptos;
 	private JButton btnBuscar, btnClasificar, btnRetirar, btnHistorial, btnDetalle, btnAnterior, btnSiguiente, btnNueva,
 			btnPredeterminadas, btnEstadoCategoria;
 	private DefaultTableModel modelo;
@@ -317,6 +318,8 @@ public class PanelClasificacionOperaciones extends JPanel {
 		btnClasificar.addActionListener(e -> clasificar(false));
 		btnRetirar = new JButton("Retirar");
 		btnRetirar.addActionListener(e -> clasificar(true));
+		btnConceptos = new JButton("Conceptos / impuestos");
+		btnConceptos.addActionListener(e -> conceptos());
 		btnDetalle = new JButton("Ver CFDI");
 		btnDetalle.addActionListener(e -> detalle());
 		btnHistorial = new JButton("Historial");
@@ -355,7 +358,8 @@ public class PanelClasificacionOperaciones extends JPanel {
 							.addComponent(separator, GroupLayout.PREFERRED_SIZE, 73, Short.MAX_VALUE))
 						.addComponent(btnRetirar, GroupLayout.DEFAULT_SIZE, 125, Short.MAX_VALUE)
 						.addComponent(btnClasificar, GroupLayout.DEFAULT_SIZE, 125, Short.MAX_VALUE)
-						.addComponent(btnDetalle, GroupLayout.DEFAULT_SIZE, 125, Short.MAX_VALUE)
+						.addComponent(btnConceptos, GroupLayout.DEFAULT_SIZE, 125, Short.MAX_VALUE)
+					.addComponent(btnDetalle, GroupLayout.DEFAULT_SIZE, 125, Short.MAX_VALUE)
 						.addComponent(btnHistorial, GroupLayout.DEFAULT_SIZE, 125, Short.MAX_VALUE)
 						.addComponent(btnAnterior, GroupLayout.DEFAULT_SIZE, 125, Short.MAX_VALUE)
 						.addComponent(btnSiguiente, GroupLayout.DEFAULT_SIZE, 125, Short.MAX_VALUE)
@@ -371,6 +375,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 					.addPreferredGap(ComponentPlacement.RELATED)
 					.addComponent(btnRetirar)
 					.addPreferredGap(ComponentPlacement.RELATED)
+					.addComponent(btnConceptos)
 					.addComponent(btnDetalle)
 					.addPreferredGap(ComponentPlacement.RELATED)
 					.addComponent(btnHistorial)
@@ -452,6 +457,7 @@ public class PanelClasificacionOperaciones extends JPanel {
 		btnClasificar.setEnabled(cambio && categoria() != null && categoria().activa());
 		btnRetirar.setEnabled(cambio);
 		btnHistorial.setEnabled(seleccion && tabla.getSelectedRowCount() == 1);
+		btnConceptos.setEnabled(btnHistorial.isEnabled());
 		tabla.setEnabled(libre);
 		btnDetalle.setEnabled(btnHistorial.isEnabled() && detalle != null
 				&& permisos.containsAll(Set.of(Permisos.CFDI_CONSULTAR, Permisos.CFDI_CONSULTAR_DETALLE)));
@@ -723,6 +729,16 @@ public class PanelClasificacionOperaciones extends JPanel {
 				seleccionadas().get(0));
 		d.setLocationRelativeTo(this);
 		d.setVisible(true);
+	}
+
+	private void conceptos() {
+		if (!btnConceptos.isEnabled()) return;
+		cancelarEdicion();
+		var dialogo = new com.kathsoft.visor.app.view.fiscal.Fr_DatosClasificacionDetalle();
+		dialogo.configurar(servicio.detalleConceptos(), sesion.id(), ultimo.titular(), seleccionadas().get(0).id(), catalogo, permisos.contains(Permisos.OPERACIONES_CLASIFICAR_DETALLE));
+		dialogo.setLocationRelativeTo(this);
+		dialogo.setVisible(true);
+		consultar(ultimo,pagina);
 	}
 
 	private void detalle() {

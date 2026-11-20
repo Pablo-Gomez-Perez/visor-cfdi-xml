@@ -66,6 +66,7 @@ public class Fr_Principal extends JFrame {
     private static final String CARD_IMPORTACION = "panelImportacion";
     private static final String CARD_VALIDACION = "panelValidacion";
     private static final String CARD_CLASIFICACION = "panelClasificacion";
+    private static final String CARD_RESUMEN_FISCAL = "panelResumenFiscal";
     private static final String CARD_OPERACIONES = "panelOperaciones";
     private static final String CARD_VISOR = "panelVisorCfdi";
     private static final String CARD_HISTORIAL = "panelHistorialImportaciones";
@@ -90,6 +91,8 @@ public class Fr_Principal extends JFrame {
     private JMenu menuCfdi;
     private JMenu menuSesion;
     private JMenu menuContabilidad;
+    private JMenuItem opcionResumenFiscal;
+    private com.kathsoft.visor.app.view.fiscal.PanelResumenFiscal panelResumenFiscal;
     private JMenuItem opcionClasificarOperaciones;
     private JMenuItem opcionInicio;
     private JMenuItem opcionUsuarios;
@@ -232,6 +235,10 @@ public class Fr_Principal extends JFrame {
         opcionClasificarOperaciones.setEnabled(false);
         opcionClasificarOperaciones.addActionListener(e -> actualizarPermisos(CARD_OPERACIONES));
         menuContabilidad.add(opcionClasificarOperaciones);
+        opcionResumenFiscal = new JMenuItem("Papeles de trabajo y resumen fiscal");
+        opcionResumenFiscal.setEnabled(false);
+        opcionResumenFiscal.addActionListener(e -> actualizarPermisos(CARD_RESUMEN_FISCAL));
+        menuContabilidad.add(opcionResumenFiscal);
 
         menuSesion = new JMenu("Sesión");
         barraMenu.add(menuSesion);
@@ -293,6 +300,8 @@ public class Fr_Principal extends JFrame {
         panelPrincipalContenedor.add(panelHistorial, CARD_HISTORIAL);
         panelVisor = new PanelVisorCfdi();
         panelPrincipalContenedor.add(panelVisor, CARD_VISOR);
+        panelResumenFiscal = new com.kathsoft.visor.app.view.fiscal.PanelResumenFiscal();
+        panelPrincipalContenedor.add(panelResumenFiscal, CARD_RESUMEN_FISCAL);
         panelOperaciones = new PanelClasificacionOperaciones();
         panelPrincipalContenedor.add(panelOperaciones, CARD_OPERACIONES);
         cardLayout.show(panelPrincipalContenedor, CARD_INICIO);
@@ -376,6 +385,9 @@ public class Fr_Principal extends JFrame {
                     opcionClasificacion.setEnabled(clasificar);
                     panelClasificacion.configurar(clasificaciones, sesion, permisos);
                     boolean verOperaciones = permisos.contains(Permisos.OPERACIONES_CONSULTAR);
+                    boolean verFiscal = permisos.contains(Permisos.FISCAL_CONSULTAR);
+                    opcionResumenFiscal.setEnabled(verFiscal);
+                    panelResumenFiscal.configurar(usuarios.resumenFiscal(),usuarios.evidenciaFinanciera(),detalleCfdi,sesion,permisos);
                     opcionClasificarOperaciones.setEnabled(verOperaciones);
                     panelOperaciones.configurar(operaciones, detalleCfdi, sesion, permisos);
                     boolean verVisor = permisos.contains(Permisos.CFDI_CONSULTAR);
@@ -390,7 +402,13 @@ public class Fr_Principal extends JFrame {
                     panelRoles.configurar(roles, sesion, permisos);
                     panelContribuyentes.configurar(contribuyentes, sesion, permisos);
                     panelTerceros.configurar(terceros, contribuyentes, sesion, permisos);
-                    if (CARD_OPERACIONES.equals(destino)) {
+                    if (CARD_RESUMEN_FISCAL.equals(destino)) {
+                        if (verFiscal) {
+                            cardLayout.show(panelPrincipalContenedor, CARD_RESUMEN_FISCAL);
+                        } else {
+                            JOptionPane.showMessageDialog(Fr_Principal.this,"No tiene permiso para consultar papeles de trabajo fiscales.");
+                        }
+                    } else if (CARD_OPERACIONES.equals(destino)) {
                         if (verOperaciones) {
                             cardLayout.show(panelPrincipalContenedor, CARD_OPERACIONES);
                             panelOperaciones.recargar();
@@ -487,6 +505,8 @@ public class Fr_Principal extends JFrame {
                     opcionValidarXml.setEnabled(false);
                     opcionClasificacion.setEnabled(false);
                     opcionHistorial.setEnabled(false);
+                    opcionResumenFiscal.setEnabled(false);
+                    panelResumenFiscal.configurar(null,null,null,null,Set.of());
                     opcionClasificarOperaciones.setEnabled(false);
                     panelOperaciones.configurar(null,null,null,Set.of());
                     opcionAdministrarXml.setEnabled(false);
