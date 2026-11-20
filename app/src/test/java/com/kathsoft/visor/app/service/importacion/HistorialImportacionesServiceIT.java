@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
+import java.util.TimeZone;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.containers.MySQLContainer;
@@ -97,7 +98,13 @@ class HistorialImportacionesServiceIT {
             });
             var rango=new Rango(LocalDate.of(2026,11,15),LocalDate.of(2026,11,15));
             var ambosDias=new Rango(rango.desde(),rango.hasta().plusDays(1));
-            assertEquals(2,historial.listar(actor,rango,0).filas().size());
+            TimeZone zonaAnterior=TimeZone.getDefault();
+            try {
+                TimeZone.setDefault(TimeZone.getTimeZone("America/Mexico_City"));
+                assertEquals(2,historial.listar(actor,rango,0).filas().size());
+            } finally {
+                TimeZone.setDefault(zonaAnterior);
+            }
             var resumen=historial.listar(actor,rango,0).filas().get(0);
             assertEquals(lote,resumen.id());
             assertEquals(3,resumen.aceptados());

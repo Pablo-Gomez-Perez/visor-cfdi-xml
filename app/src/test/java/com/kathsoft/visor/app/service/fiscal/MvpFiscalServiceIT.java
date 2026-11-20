@@ -631,14 +631,20 @@ class MvpFiscalServiceIT {
                 ejecutar(em, "UPDATE pago_fiscal SET fecha_pago='2026-07-01 00:00:00' WHERE documento_id=2206");
                 return null;
             });
-            var origenesJunioFinal = resumen.consultar(actor, junio, Seccion.ORIGENES, 0);
-            assertTrue(origenesJunioFinal.filas().stream().noneMatch(f ->
-                    f.get(columna(origenesJunioFinal, "Documento")) instanceof Number n && n.longValue() == 1206));
-            assertEquals(216, operaciones.resumir(actor,
-                    new ClasificacionOperacionesService.Filtro(a, junio.desde(), junio.hasta(), "RECIBIDO", "", -1)).operaciones());
-            var ivaMedianoche = resumen.consultar(actor, julio, Seccion.IVA, 0);
-            igual("16", documento(ivaMedianoche, "Factura documento", 1206)
-                    .get(columna(ivaMedianoche, "IVA realizadoDR")));
+            java.util.TimeZone zonaAnterior=java.util.TimeZone.getDefault();
+            try {
+                java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Mexico_City"));
+                var origenesJunioFinal = resumen.consultar(actor, junio, Seccion.ORIGENES, 0);
+                assertTrue(origenesJunioFinal.filas().stream().noneMatch(f ->
+                        f.get(columna(origenesJunioFinal, "Documento")) instanceof Number n && n.longValue() == 1206));
+                assertEquals(216, operaciones.resumir(actor,
+                        new ClasificacionOperacionesService.Filtro(a, junio.desde(), junio.hasta(), "RECIBIDO", "", -1)).operaciones());
+                var ivaMedianoche = resumen.consultar(actor, julio, Seccion.IVA, 0);
+                igual("16", documento(ivaMedianoche, "Factura documento", 1206)
+                        .get(columna(ivaMedianoche, "IVA realizadoDR")));
+            } finally {
+                java.util.TimeZone.setDefault(zonaAnterior);
+            }
         }
     }
 }
