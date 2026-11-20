@@ -12,7 +12,7 @@ public final class TercerosFiscalService {
     private final JpaContext jpa;
     /** Inyecta contexto compartido. */
     public TercerosFiscalService(JpaContext jpa){this.jpa=Objects.requireNonNull(jpa);}
-    private static final String SALDOS="""
+    static final String SALDOS="""
         ,aplicaciones AS (
           SELECT a.*,m.fecha_movimiento,
             CASE WHEN NOT EXISTS (

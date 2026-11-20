@@ -30,6 +30,148 @@ public final class EvidenciaFinancieraService {
     public record ReferenciaRep(long id,LocalDateTime fecha,String uuid,String monedaPago,BigDecimal importePago,String monedaFactura,BigDecimal importeFactura) {
         @Override public String toString(){return fecha+" · "+uuid+" · "+importeFactura+" "+monedaFactura;}
     }
+    /**
+     * Aplicación manual ya persistida que puede conciliarse con un REP posterior.
+     * El identificador de movimiento es interno y nunca se introduce manualmente en la vista.
+     *
+     * @param id identificador del movimiento del titular
+     * @param fecha fecha y hora registradas del movimiento
+     * @param moneda moneda del pago o cobro
+     * @param importePago importe completo del movimiento en su moneda
+     * @param importeAplicado importe aplicado en moneda de la factura
+     * @param referencia referencia administrativa original, sin modificarla al vincular
+     */
+    public record AplicacionRegistrada(long id,LocalDateTime fecha,String moneda,
+            BigDecimal importePago,BigDecimal importeAplicado,String referencia) {
+        @Override public String toString(){
+            return fecha+" · "+importePago.toPlainString()+" "+moneda+" · "+(referencia==null?"Sin referencia":referencia);
+        }
+    }
+
+    /**
+     * Lista hasta 200 aplicaciones manuales de esta factura todavía sin vínculo REP.
+     * La consulta exige permiso vigente y alcance del titular, también para documentos compartidos.
+     * Los movimientos repartidos entre varias obligaciones requieren conciliación específica y no
+     * se ofrecen en esta operación de vinculación individual.
+     *
+     * @param actor usuario activo que consulta
+     * @param titular contribuyente explícitamente asignado
+     * @param documento factura disponible del titular
+     * @return aplicaciones existentes; no crea obligaciones ni movimientos
+     */
+    @SuppressWarnings("unchecked")
+    public List<AplicacionRegistrada> aplicacionesNoVinculadas(Long actor,long titular,long documento){
+        return jpa.consultar(em->{
+            AccesoFiscal.exigir(em,actor,titular,Permisos.FISCAL_CONSULTAR);
+            AccesoFiscal.documento(em,titular,documento,false);
+            List<Object[]> filas=em.createNativeQuery("""
+                SELECT m.id,m.fecha_movimiento,m.moneda,m.importe,a.importe_moneda_obligacion,m.referencia
+                FROM obligacion o JOIN aplicacion_pago a ON a.obligacion_id=o.id
+                JOIN movimiento_pago m ON m.id=a.movimiento_pago_id AND m.contribuyente_id=o.contribuyente_id
+                WHERE o.contribuyente_id=:t AND o.documento_id=:d AND m.origen='MANUAL'
+                  AND NOT EXISTS(SELECT 1 FROM movimiento_pago_complemento mc
+                    WHERE mc.movimiento_pago_id=m.id)
+                  AND NOT EXISTS(SELECT 1 FROM aplicacion_pago otra
+                    WHERE otra.movimiento_pago_id=m.id AND otra.obligacion_id<>o.id)
+                ORDER BY m.fecha_movimiento,m.id
+                """).setParameter("t",titular).setParameter("d",documento).setMaxResults(200).getResultList();
+            return filas.stream().map(r->new AplicacionRegistrada(n(r[0]),fecha(r[1]),r[2].toString(),
+                    (BigDecimal)r[3],(BigDecimal)r[4],r[5]==null?null:r[5].toString())).toList();
+        });
+    }
+
+    /**
+     * Vincula un movimiento manual ya aplicado con su DR importado posteriormente.
+     * Sólo añade el vínculo y la auditoría; no registra otro movimiento ni otra aplicación.
+     * Revalida alcance, disponibilidad, fecha, monedas, importes y equivalencia dentro de la
+     * transacción. Un DR compartido puede conciliarse de forma independiente por cada titular.
+     *
+     * @param actor usuario activo con consulta y registro de evidencia
+     * @param titular contribuyente explícitamente asignado
+     * @param documento factura disponible a la que ya se aplicó el movimiento
+     * @param movimientoId identificador interno del movimiento manual existente
+     * @param drId identificador del documento relacionado original del REP
+     * @param motivo justificación obligatoria de la conciliación
+     * @return identificador del movimiento conservado
+     */
+    public long vincular(Long actor,long titular,long documento,long movimientoId,long drId,String motivo){
+        if(movimientoId<=0||drId<=0)throw new IllegalArgumentException("Seleccione movimiento y DR disponibles");
+        String razon=texto(motivo,500);
+        return jpa.enTransaccion(em->{
+            acceso(em,actor,titular,documento);
+            Datos d=datos(em,titular,documento);
+            @SuppressWarnings("unchecked") List<Object[]> aplicaciones=em.createNativeQuery("""
+                SELECT m.fecha_movimiento,m.moneda,m.importe,a.importe_moneda_pago,
+                  a.importe_moneda_obligacion,o.moneda,o.monto_original,m.naturaleza,
+                  m.tercero_id,o.tercero_id,o.id
+                FROM movimiento_pago m JOIN aplicacion_pago a ON a.movimiento_pago_id=m.id
+                JOIN obligacion o ON o.id=a.obligacion_id AND o.contribuyente_id=m.contribuyente_id
+                WHERE m.id=:m AND m.contribuyente_id=:t AND m.origen='MANUAL'
+                  AND o.documento_id=:d AND o.naturaleza=:n FOR UPDATE
+                """).setParameter("m",movimientoId).setParameter("t",titular).setParameter("d",documento)
+                .setParameter("n",d.naturaleza()).getResultList();
+            if(aplicaciones.size()!=1)throw new SecurityException("Movimiento manual no disponible para esta factura y contribuyente");
+            Object[] a=aplicaciones.get(0);
+            String naturaleza=d.naturaleza().equals("PAGAR")?"PAGO":"COBRO";
+            if(!d.moneda().equals(a[5])||d.total().compareTo((BigDecimal)a[6])!=0
+                    ||!naturaleza.equals(a[7])||!Objects.equals(d.tercero(),a[8]==null?null:n(a[8]))
+                    ||!Objects.equals(d.tercero(),a[9]==null?null:n(a[9])))
+                throw new IllegalArgumentException("Movimiento y obligación no concilian con moneda, importe o tercero de la factura");
+            if(!em.createNativeQuery("SELECT obligacion_id FROM aplicacion_pago WHERE movimiento_pago_id=:m AND obligacion_id<>:o FOR UPDATE")
+                    .setParameter("m",movimientoId).setParameter("o",n(a[10])).getResultList().isEmpty())
+                throw new IllegalArgumentException("Movimiento aplicado a varias obligaciones; requiere conciliación específica");
+            if(!em.createNativeQuery("SELECT pago_fiscal_documento_id FROM movimiento_pago_complemento WHERE movimiento_pago_id=:m FOR UPDATE")
+                    .setParameter("m",movimientoId).getResultList().isEmpty())
+                throw new IllegalArgumentException("Movimiento ya vinculado a un REP");
+
+            List<?> documentosRep=em.createNativeQuery("""
+                SELECT p.documento_id FROM pago_fiscal_documento pd JOIN pago_fiscal p ON p.id=pd.pago_fiscal_id
+                JOIN contribuyente_documento cd ON cd.documento_id=p.documento_id AND cd.contribuyente_id=:t
+                WHERE pd.id=:dr AND pd.uuid_documento=:uuid AND cd.archivado_en IS NULL
+                """).setParameter("t",titular).setParameter("dr",drId).setParameter("uuid",d.uuid()).getResultList();
+            if(documentosRep.size()!=1)throw new SecurityException("DR no disponible para esta factura y contribuyente");
+            AccesoFiscal.documento(em,titular,n(documentosRep.get(0)),true);
+            Object[] rep=(Object[])em.createNativeQuery("""
+                SELECT p.fecha_pago,p.moneda,pd.moneda,p.monto,pd.importe_pagado,pd.equivalencia_dr,
+                  cd.sentido,COALESCE((SELECT s.estado FROM consulta_estado_sat s WHERE s.documento_id=p.documento_id
+                    ORDER BY s.fecha_consulta DESC,s.id DESC LIMIT 1),'SIN_CONSULTA'),
+                  pd.tipo_cambio_dr,pc.version_complemento
+                FROM pago_fiscal_documento pd JOIN pago_fiscal p ON p.id=pd.pago_fiscal_id
+                JOIN contribuyente_documento cd ON cd.documento_id=p.documento_id AND cd.contribuyente_id=:t
+                LEFT JOIN pago_fiscal_complemento pc ON pc.documento_id=p.documento_id
+                WHERE pd.id=:dr AND pd.uuid_documento=:uuid AND cd.archivado_en IS NULL FOR UPDATE
+                """).setParameter("t",titular).setParameter("dr",drId).setParameter("uuid",d.uuid()).getSingleResult();
+            if("CANCELADO".equals(rep[7])||!d.sentido().equals(rep[6]))
+                throw new IllegalArgumentException("REP cancelado o de sentido incompatible con la factura");
+            if(!fecha(a[0]).equals(fecha(rep[0]))||!a[1].equals(rep[1])||!d.moneda().equals(rep[2])
+                    ||rep[4]==null||((BigDecimal)a[4]).compareTo((BigDecimal)rep[4])!=0)
+                throw new IllegalArgumentException("FechaPago, moneda o importe aplicado no coinciden exactamente con el DR");
+            BigDecimal equivalencia=(BigDecimal)rep[5];
+            if(a[1].equals(d.moneda())){
+                if(equivalencia!=null&&equivalencia.compareTo(BigDecimal.ONE)!=0)
+                    throw new IllegalArgumentException("Equivalencia distinta de uno entre monedas iguales");
+                equivalencia=BigDecimal.ONE;
+            }else if(equivalencia==null&&"1.0".equals(rep[9]))equivalencia=(BigDecimal)rep[8];
+            if(equivalencia==null||equivalencia.signum()<=0)
+                throw new IllegalArgumentException("Equivalencia original insuficiente para conciliar monedas");
+            BigDecimal importeAplicado=(BigDecimal)a[4],importePago=(BigDecimal)a[3],importeMovimiento=(BigDecimal)a[2];
+            positivo(importeAplicado);positivo(importePago);positivo(importeMovimiento);
+            if(importeAplicado.compareTo(d.total())>0||importeMovimiento.compareTo(importePago)!=0
+                    ||importePago.compareTo(importeAplicado.divide(equivalencia,6,java.math.RoundingMode.HALF_UP))!=0
+                    ||importePago.compareTo((BigDecimal)rep[3])>0)
+                throw new IllegalArgumentException("Los importes en MonedaP no concilian exactamente con movimiento y DR");
+            if(!em.createNativeQuery("""
+                SELECT mc.movimiento_pago_id FROM movimiento_pago_complemento mc
+                JOIN movimiento_pago m ON m.id=mc.movimiento_pago_id
+                WHERE mc.pago_fiscal_documento_id=:dr AND m.contribuyente_id=:t FOR UPDATE
+                """).setParameter("dr",drId).setParameter("t",titular).getResultList().isEmpty())
+                throw new IllegalArgumentException("DR ya vinculado para este contribuyente");
+            em.createNativeQuery("INSERT INTO movimiento_pago_complemento(movimiento_pago_id,pago_fiscal_documento_id) VALUES (:m,:dr)")
+                .setParameter("m",movimientoId).setParameter("dr",drId).executeUpdate();
+            auditar(em,actor,titular,documento,"VINCULAR_REP",razon+"; movimiento="+movimientoId+"; DR="+drId);
+            return movimientoId;
+        });
+    }
     /** Consulta hasta 200 evidencias REP disponibles del mismo titular, sin asumir su estado fiscal. */
     @SuppressWarnings("unchecked") public List<ReferenciaRep> referencias(Long actor,long titular,long documento) {
         return jpa.consultar(em->{

@@ -131,7 +131,7 @@ public class PanelResumenFiscal extends JPanel {
             DefaultTableModel modelo=new DefaultTableModel(r.columnas().toArray(),0){@Override public boolean isCellEditable(int row,int col){return false;}};
             for(List<Object> fila:r.filas())modelo.addRow(fila.toArray());destino.setModel(modelo);
             for(int c=0;c<destino.getColumnCount();c++)destino.getColumnModel().getColumn(c).setPreferredWidth(135);
-            advertencia.setText(r.aviso());advertencia.setToolTipText(r.aviso());estado.setText("Página "+(p+1)+" · "+r.filas().size()+" filas · "+f.desde()+" / "+f.hasta());
+            advertencia.setText(r.aviso());advertencia.setToolTipText(r.aviso());estado.setText("Página "+(p+1)+" · "+r.filas().size()+" filas · "+f.desde()+" / "+f.hasta()+(f.documento()>0?" · comprobante de origen seleccionado":"")+(f.categoria()>0?" · categoría seleccionada":""));
         });
     }
     private void controles(){
@@ -151,8 +151,17 @@ public class PanelResumenFiscal extends JPanel {
     private String seleccionado(String nombre,String defecto){JTable t=tabla();int v=t.getSelectedRow();if(v<0)return defecto;int r=t.convertRowIndexToModel(v);for(int c=0;c<t.getModel().getColumnCount();c++)if(t.getModel().getColumnName(c).equals(nombre)){Object valor=t.getModel().getValueAt(r,c);return valor==null?defecto:valor.toString();}return defecto;}
     private void abrirOrigenes(){
         if(!origenes.isEnabled()||aplicado==null)return;
-        FiltroFiscal f=new FiltroFiscal(aplicado.titular(),aplicado.desde(),aplicado.hasta(),seleccionado("Sentido",aplicado.sentido()),seleccionado("RFC",aplicado.rfc()),seleccionado("Naturaleza",aplicado.naturaleza()),aplicado.categoria(),seleccionado("Moneda",aplicado.moneda()),seleccionado("Tipo",aplicado.tipo()),seleccionado("SAT",aplicado.estadoSat()));
-        cargando=true;pestanas.setSelectedIndex(Seccion.ORIGENES.ordinal());cargando=false;consultar(f,0);
+        Seccion actual=seccion();
+        boolean pagos=actual==Seccion.IVA_RESUMEN && seleccionado("Fuente temporal","").equals("REP_FECHA_PAGO");
+        boolean finanzas=seleccionado("Origen del periodo","").startsWith("FINANCIERO");
+        long doc=actual==Seccion.IVA?documentoSeleccionado(true):documentoSeleccionado(false);
+        String tasa=seleccionado("Tasa/cuota","");
+        String impuesto=seleccionado("Código",seleccionado("Impuesto",""));
+        if(actual==Seccion.IVA_RESUMEN||actual==Seccion.IVA)impuesto="002";
+        if(!Set.of("001","002","003").contains(impuesto))impuesto="";
+        String categoria=seleccionado("Categoría ID","");
+        FiltroFiscal f=new FiltroFiscal(aplicado.titular(),aplicado.desde(),aplicado.hasta(),seleccionado("Sentido",seleccionado("Sentido factura",aplicado.sentido())),seleccionado("RFC",aplicado.rfc()),seleccionado("Naturaleza",aplicado.naturaleza()),categoria.isEmpty()?aplicado.categoria():Long.parseLong(categoria),seleccionado("Moneda",seleccionado("MonedaDR",aplicado.moneda())),seleccionado("Tipo",aplicado.tipo()),seleccionado("SAT",seleccionado("SAT factura",aplicado.estadoSat())),doc>0?doc:aplicado.documento(),impuesto,seleccionado("Movimiento",aplicado.movimiento()),seleccionado("Factor",aplicado.factor()),tasa.isEmpty()?aplicado.tasa():new java.math.BigDecimal(tasa));
+        cargando=true;pestanas.setSelectedIndex((pagos?Seccion.IVA:finanzas?Seccion.FINANCIERO:Seccion.ORIGENES).ordinal());cargando=false;consultar(f,0);
     }
     private void exportar(){
         if(!exportar.isEnabled())return;JFileChooser chooser=new JFileChooser();chooser.setSelectedFile(new java.io.File("auxiliar-"+seccion().name().toLowerCase(java.util.Locale.ROOT)+".csv"));

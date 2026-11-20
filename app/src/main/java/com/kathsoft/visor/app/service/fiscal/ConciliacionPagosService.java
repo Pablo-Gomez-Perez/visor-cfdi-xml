@@ -23,8 +23,8 @@ public final class ConciliacionPagosService {
                   FROM activos u JOIN pago_fiscal p ON p.documento_id=u.documento_id WHERE p.fecha_pago>=:desde AND p.fecha_pago<:hasta
                 """+FiscalSql.filtros(f,"u")+"""
                 ),dr_convertidos AS (
-                  SELECT p.pago_id,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota,
-                    i.base/CASE WHEN pd.moneda=p.moneda THEN 1 ELSE NULLIF(pd.equivalencia_dr,0) END base_p,
+                  SELECT p.pago_id,i.impuesto,i.movimiento,CASE WHEN i.movimiento='RETENCION' THEN NULL ELSE i.tipo_factor END tipo_factor,CASE WHEN i.movimiento='RETENCION' THEN NULL ELSE i.tasa_cuota END tasa_cuota,
+                    CASE WHEN i.movimiento='TRASLADO' THEN i.base END/CASE WHEN pd.moneda=p.moneda THEN 1 ELSE NULLIF(pd.equivalencia_dr,0) END base_p,
                     i.importe/CASE WHEN pd.moneda=p.moneda THEN 1 ELSE NULLIF(pd.equivalencia_dr,0) END importe_p,
                     CASE WHEN pd.moneda<>p.moneda AND (pd.equivalencia_dr IS NULL OR pd.equivalencia_dr<=0) THEN 1 ELSE 0 END sin_factor
                   FROM pagos_periodo p JOIN pago_fiscal_documento pd ON pd.pago_fiscal_id=p.pago_id
@@ -33,8 +33,8 @@ public final class ConciliacionPagosService {
                   SELECT pago_id,impuesto,movimiento,tipo_factor,tasa_cuota,SUM(base_p) base_p,SUM(importe_p) importe_p,SUM(sin_factor) sin_factor
                   FROM dr_convertidos GROUP BY pago_id,impuesto,movimiento,tipo_factor,tasa_cuota
                 ),ip AS (
-                  SELECT p.pago_id,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota,SUM(i.base) base_p,SUM(i.importe) importe_p
-                  FROM pagos_periodo p JOIN pago_fiscal_impuesto_pago i ON i.pago_fiscal_id=p.pago_id GROUP BY p.pago_id,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota
+                  SELECT p.pago_id,i.impuesto,i.movimiento,CASE WHEN i.movimiento='RETENCION' THEN NULL ELSE i.tipo_factor END tipo_factor,CASE WHEN i.movimiento='RETENCION' THEN NULL ELSE i.tasa_cuota END tasa_cuota,SUM(i.base) base_p,SUM(i.importe) importe_p
+                  FROM pagos_periodo p JOIN pago_fiscal_impuesto_pago i ON i.pago_fiscal_id=p.pago_id GROUP BY p.pago_id,i.impuesto,i.movimiento,CASE WHEN i.movimiento='RETENCION' THEN NULL ELSE i.tipo_factor END,CASE WHEN i.movimiento='RETENCION' THEN NULL ELSE i.tasa_cuota END
                 ),firmas AS (
                   SELECT pago_id,impuesto,movimiento,tipo_factor,tasa_cuota FROM dr
                   UNION SELECT pago_id,impuesto,movimiento,tipo_factor,tasa_cuota FROM ip

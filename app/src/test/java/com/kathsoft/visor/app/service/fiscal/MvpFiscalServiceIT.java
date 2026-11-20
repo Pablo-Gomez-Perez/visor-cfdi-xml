@@ -13,6 +13,8 @@ import com.kathsoft.visor.app.service.fiscal.ClasificacionDetalleService.Asignac
 import com.kathsoft.visor.app.service.fiscal.ClasificacionDetalleService.Tipo;
 import com.kathsoft.visor.app.service.fiscal.EvidenciaFinancieraService.Pago;
 import com.kathsoft.visor.app.service.fiscal.ResumenFiscalService.Seccion;
+import com.kathsoft.visor.app.service.operacion.ClasificacionOperacionesService;
+import com.kathsoft.visor.app.service.operacion.ClasificacionOperacionesService.Naturaleza;
 import com.kathsoft.visor.app.service.operacion.ClasificacionOperacionesService.Seleccion;
 import com.kathsoft.visor.app.service.usuario.UsuariosService;
 import jakarta.persistence.EntityManager;
@@ -345,6 +347,19 @@ class MvpFiscalServiceIT {
                     .map(f -> (BigDecimal) f.get(columna(general, "Subtotal documental"))).reduce(BigDecimal.ZERO, BigDecimal::add);
             igual("29405", mxn);
 
+            // RF-020 conserva un conteo documental, aunque un CFDI aparezca en tres naturalezas.
+            var filtroOperaciones = new ClasificacionOperacionesService.Filtro(a, junio.desde(), junio.hasta(), "RECIBIDO", "", gasto);
+            var resumenOperaciones = operaciones.resumir(actor, filtroOperaciones);
+            assertEquals(1, resumenOperaciones.operaciones());
+            assertEquals(1, resumenOperaciones.clasificadas());
+            assertEquals(3, resumenOperaciones.grupos().size());
+            assertTrue(resumenOperaciones.grupos().stream().allMatch(g -> g.documentos() == 1));
+            igual("10000", resumenOperaciones.grupos().stream().filter(g -> g.naturaleza().equals("COSTO")).findFirst().orElseThrow().subtotalNeto());
+            igual("2000", resumenOperaciones.grupos().stream().filter(g -> g.naturaleza().equals("GASTO")).findFirst().orElseThrow().subtotalNeto());
+            igual("15000", resumenOperaciones.grupos().stream().filter(g -> g.naturaleza().equals("INVERSION")).findFirst().orElseThrow().subtotalNeto());
+            igual("4320", resumenOperaciones.grupos().stream().map(g -> g.ivaTrasladado()).reduce(BigDecimal.ZERO, BigDecimal::add));
+            assertEquals(216, operaciones.resumir(actor, new ClasificacionOperacionesService.Filtro(a, junio.desde(), junio.hasta(), "RECIBIDO", "", -1)).operaciones());
+
             var financiera = new EvidenciaFinancieraService(jpa);
             assertEquals(2, financiera.referencias(actor, a, FACTURA).size());
             assertEquals(2, financiera.referencias(actor, b, FACTURA).size());
@@ -406,6 +421,167 @@ class MvpFiscalServiceIT {
                 System.err.println("EXPLAIN fiscal sintético MySQL8: " + plan);
                 return null;
             });
+
+            // La factura se emitió en junio; el rastro desde IVA de julio conserva el periodo de pago.
+            var rastroJulio = new FiltroFiscal(a, julio.desde(), julio.hasta(), "RECIBIDO", "", "", 0,
+                    "MXN", "I", "VIGENTE", FACTURA, "002", "TRASLADO", "Tasa", decimal("0.16"));
+            assertEquals(LocalDate.of(2026, 7, 1), rastroJulio.desde());
+            assertEquals(FACTURA, rastroJulio.documento());
+            var origenPrevio = resumen.consultar(actor, rastroJulio, Seccion.ORIGENES, 0);
+            assertEquals(1, origenPrevio.filas().size());
+            igual("1000", documento(origenPrevio, "Documento", FACTURA).get(columna(origenPrevio, "Neto original concepto")));
+            igual("160", documento(origenPrevio, "Documento", FACTURA).get(columna(origenPrevio, "Impuesto original")));
+            var impuestoPrevio = impuestos.consultar(actor, rastroJulio, ImpuestosService.Nivel.CONCEPTO, 0);
+            assertTrue(documento(impuestoPrevio, "Documento", FACTURA).get(columna(impuestoPrevio, "Emisión")).toString().startsWith("2026-06-05"));
+
+            var manuales = resumen.consultar(actor, julio, Seccion.IVA_MANUAL, 0);
+            var pueManual = documento(manuales, "Documento", PUE);
+            assertEquals("PENDIENTE_REVISION_FISCAL", pueManual.get(columna(manuales, "Estado auxiliar")));
+            igual("20", pueManual.get(columna(manuales, "Aplicación en moneda factura")));
+            igual("16", pueManual.get(columna(manuales, "IVA original factura")));
+            assertNotNull(pueManual.get(columna(manuales, "IVA proporcional DERIVADO pendiente")));
+            assertTrue(pueManual.get(columna(manuales, "Incidencias")).toString().contains("NO_CONFIRMA_REQUISITOS_FISCALES"));
+            assertFalse(manuales.filas().stream().anyMatch(f -> f.get(columna(manuales, "Documento")) instanceof Number n && n.longValue() == FACTURA));
+
+            // Cancelar un REP aplicado no elimina aplicaciones: excluye su evidencia de ambos titulares.
+            jpa.enTransaccion(em -> {
+                ejecutar(em, "INSERT INTO consulta_estado_sat(documento_id,estado,fecha_consulta) VALUES (2002,'CANCELADO','2026-08-01 00:00:00')");
+                return null;
+            });
+            for (long titular : new long[] { a, b }) {
+                var saldosCancelacion = resumen.consultar(actor, mes(titular, 7), Seccion.FINANCIERO, 0);
+                var facturaCancelacion = documento(saldosCancelacion, "Documento", FACTURA);
+                igual("580", facturaCancelacion.get(columna(saldosCancelacion, "Saldo inicial documentado")));
+                igual("0", facturaCancelacion.get(columna(saldosCancelacion, "Pagos/cobros del periodo")));
+                igual("580", facturaCancelacion.get(columna(saldosCancelacion, "Saldo al corte documentado")));
+                igual("580", facturaCancelacion.get(columna(saldosCancelacion, "Pagos REP excluidos por estado / archivado")));
+            }
+            var ivaCancelacion = resumen.consultar(actor, julio, Seccion.IVA, 0);
+            assertNull(documento(ivaCancelacion, "Factura documento", FACTURA).get(columna(ivaCancelacion, "IVA realizadoDR")));
+            jpa.consultar(em -> {
+                assertEquals(4L, ((Number) em.createNativeQuery("SELECT COUNT(*) FROM aplicacion_pago a JOIN obligacion o ON o.id=a.obligacion_id WHERE o.documento_id=1001").getSingleResult()).longValue());
+                assertEquals(2L, ((Number) em.createNativeQuery("SELECT COUNT(*) FROM movimiento_pago_complemento WHERE pago_fiscal_documento_id=20021").getSingleResult()).longValue());
+                igual("160", em.createNativeQuery("SELECT importe FROM cfdi_concepto_impuesto WHERE id=100111").getSingleResult());
+                return null;
+            });
+
+            // Fixtures adicionales se crean después de las comprobaciones de conteos y montos previos.
+            jpa.enTransaccion(em -> {
+                comprobante(em, a, b, 1200, "I", 7, 24, "MXN", "4", "4.000002", "PPD", "VIGENTE", true);
+                long residual = concepto(em, 1200, 1, "4", "02");
+                impuesto(em, residual, "TRASLADO", 1, "002", "Tasa", "4", "0.16", "0.000002");
+                comprobante(em, a, b, 1201, "I", 7, 25, "MXN", "100", "116", "PUE", "VIGENTE", true);
+                ejecutar(em, "UPDATE documento_fiscal SET version_estandar='3.3' WHERE id=1201");
+                long historico = concepto(em, 1201, 1, "100", null);
+                impuesto(em, historico, "TRASLADO", 1, "002", "Tasa", "100", "0.16", "16");
+                comprobante(em, a, b, 1202, "I", 7, 26, "MXN", "100", "116", "PUE", "VIGENTE", true);
+                iva(em, 1202, "100", "16");
+                ejecutar(em, """
+                    INSERT INTO obligacion(contribuyente_id,documento_id,tercero_id,naturaleza,moneda,monto_original,fecha_origen)
+                    VALUES (?1,1202,?2,'PAGAR','USD',100,'2026-07-26')
+                    """, a, TERCERO_EMISOR);
+                long dr = rep(em, a, b, 2100, ESPECIAL, 7, 28, "MXN", "MXN", "541.2", "541.2", "541.2", "0", 1,
+                        "220", "35.2", "1", null, "VIGENTE", "2.0");
+                ejecutar(em, """
+                    INSERT INTO pago_fiscal_impuesto_documento(pago_documento_id,movimiento,ordinal,impuesto,tipo_factor,base,tasa_cuota,importe)
+                    VALUES (?1,'RETENCION',1,'001','Tasa',200,0.05,10),
+                           (?1,'RETENCION',2,'002','Tasa',200,0.02,4)
+                    """, dr);
+                ejecutar(em, """
+                    INSERT INTO pago_fiscal_impuesto_pago(pago_fiscal_id,movimiento,ordinal,impuesto,tipo_factor,base,tasa_cuota,importe)
+                    VALUES (21000,'RETENCION',1,'001',NULL,NULL,NULL,10),
+                           (21000,'RETENCION',2,'002',NULL,NULL,NULL,4)
+                    """);
+                ejecutar(em, "INSERT INTO pago_fiscal_total_impuesto(documento_id,atributo,importe_mxn) VALUES (2100,'TotalRetencionesISR',10),(2100,'TotalRetencionesIVA',4)");
+                return null;
+            });
+            for (int i = 1; i <= 4; i++) operaciones.crearCategoria(actor, a, "RESIDUO_" + i, "Residuo sintético " + i, Naturaleza.OTRA);
+            var categoriasResiduo = operaciones.categorias(actor, a).stream().filter(c -> c.clave().startsWith("RESIDUO_"))
+                    .map(c -> new Asignacion(c.id(), BigDecimal.ONE, "Parte sintética del neto")).toList();
+            assertEquals(4, categoriasResiduo.size());
+            detalle.guardar(actor, a, 1200, Tipo.CONCEPTO, 12001, 0, categoriasResiduo, "");
+            var filtroResiduo = new FiltroFiscal(a, julio.desde(), julio.hasta(), "RECIBIDO", "", "", 0,
+                    "MXN", "I", "VIGENTE", 1200, "002", "TRASLADO", "Tasa", decimal("0.16"));
+            var residuo = resumen.consultar(actor, filtroResiduo, Seccion.ORIGENES, 0);
+            assertEquals(4, residuo.filas().size());
+            assertTrue(residuo.filas().stream().allMatch(f -> ((BigDecimal) f.get(columna(residuo, "Impuesto distribuido derivado"))).signum() >= 0));
+            igual("0.000002", residuo.filas().stream().map(f -> (BigDecimal) f.get(columna(residuo, "Impuesto distribuido derivado"))).reduce(BigDecimal.ZERO, BigDecimal::add));
+            igual("4", residuo.filas().stream().map(f -> (BigDecimal) f.get(columna(residuo, "Base distribuida derivada"))).reduce(BigDecimal.ZERO, BigDecimal::add));
+            operaciones.clasificar(actor, a, List.of(new Seleccion(1201, 0)), gasto, "CFDI 3.3 sin ObjetoImp");
+            var filtroHistorico = new FiltroFiscal(a, julio.desde(), julio.hasta(), "RECIBIDO", "", "", 0,
+                    "MXN", "I", "VIGENTE", 1201, "", "", "", null);
+            var egresoHistorico = resumen.consultar(actor, filtroHistorico, Seccion.EGRESOS, 0);
+            assertEquals(1, egresoHistorico.filas().size());
+            igual("100", egresoHistorico.filas().get(0).get(columna(egresoHistorico, "Base 16% distribuida")));
+            igual("16", egresoHistorico.filas().get(0).get(columna(egresoHistorico, "IVA declarado distribuido")));
+            var obligacionAjena = assertThrows(IllegalArgumentException.class, () -> financiera.registrar(actor, a, 1202,
+                    pago(7, 27, "10", "Obligacion-incompatible", null)));
+            assertTrue(obligacionAjena.getMessage().contains("no concilia"));
+            jpa.consultar(em -> {
+                assertEquals(0L, ((Number) em.createNativeQuery("SELECT COUNT(*) FROM aplicacion_pago a JOIN obligacion o ON o.id=a.obligacion_id WHERE o.documento_id=1202").getSingleResult()).longValue());
+                assertEquals("USD", em.createNativeQuery("SELECT moneda FROM obligacion WHERE documento_id=1202").getSingleResult());
+                return null;
+            });
+            var conciliacionRet = new ConciliacionPagosService(jpa).documentosContraPago(actor, julio, 0);
+            var retenidos = conciliacionRet.filas().stream().filter(f -> ((Number) f.get(columna(conciliacionRet, "Documento REP"))).longValue() == 2100
+                    && "RETENCION".equals(f.get(columna(conciliacionRet, "Movimiento")))).toList();
+            assertEquals(2, retenidos.size());
+            for (var retenido : retenidos) {
+                assertNull(retenido.get(columna(conciliacionRet, "Factor")));
+                assertNull(retenido.get(columna(conciliacionRet, "Tasa/cuota")));
+                assertNull(retenido.get(columna(conciliacionRet, "Base DR convertida derivada")));
+                igual("0", retenido.get(columna(conciliacionRet, "Diferencia impuesto")));
+                String importe = "001".equals(retenido.get(columna(conciliacionRet, "Impuesto"))) ? "10" : "4";
+                igual(importe, retenido.get(columna(conciliacionRet, "Impuesto DR convertido derivado")));
+                igual(importe, retenido.get(columna(conciliacionRet, "ImpuestoP original")));
+            }
+
+            // Un pago administrativo anterior al REP se concilia sin crear otro movimiento ni aplicación.
+            jpa.enTransaccion(em -> {
+                comprobante(em, a, b, 1203, "I", 7, 27, "MXN", "100", "116", "PPD", "VIGENTE", true);
+                iva(em, 1203, "100", "16");
+                return null;
+            });
+            long movimientoManual = financiera.registrar(actor, a, 1203,
+                    pago(7, 29, "58", "Banco-previo-REP", null));
+            assertEquals(1, financiera.aplicacionesNoVinculadas(actor, a, 1203).size());
+            jpa.enTransaccion(em -> {
+                rep(em, a, b, 2200, 1203, 7, 29, "MXN", "MXN", "58", "58", "116", "58", 1,
+                        "50", "8", "1", null, "VIGENTE", "2.0");
+                return null;
+            });
+            assertThrows(SecurityException.class,
+                    () -> financiera.vincular(actor, b, 1203, movimientoManual, 22001, "Titular ajeno"));
+            assertEquals(movimientoManual,
+                    financiera.vincular(actor, a, 1203, movimientoManual, 22001, "Conciliación bancaria y REP sintéticos"));
+            assertTrue(financiera.aplicacionesNoVinculadas(actor, a, 1203).isEmpty());
+            assertThrows(IllegalArgumentException.class,
+                    () -> financiera.vincular(actor, a, 1203, movimientoManual, 22001, "Segundo vínculo rechazado"));
+            jpa.consultar(em -> {
+                assertEquals(1L, ((Number) em.createNativeQuery(
+                        "SELECT COUNT(*) FROM aplicacion_pago WHERE movimiento_pago_id=:m")
+                        .setParameter("m", movimientoManual).getSingleResult()).longValue());
+                assertEquals(1L, ((Number) em.createNativeQuery(
+                        "SELECT COUNT(*) FROM movimiento_pago_complemento WHERE movimiento_pago_id=:m")
+                        .setParameter("m", movimientoManual).getSingleResult()).longValue());
+                return null;
+            });
+            var julioConciliado = resumen.consultar(actor, julio, Seccion.IVA_MANUAL, 0);
+            assertFalse(julioConciliado.filas().stream().anyMatch(f ->
+                    f.get(columna(julioConciliado, "Documento")) instanceof Number n && n.longValue() == 1203));
+
+            // Pago del ejercicio anterior: la emisión no limita el universo del REP en julio de 2026.
+            jpa.enTransaccion(em -> {
+                comprobante(em, a, b, 1204, "I", 6, 1, "MXN", "100", "116", "PPD", "VIGENTE", true);
+                ejecutar(em, "UPDATE documento_fiscal SET fecha_emision='2025-12-18 12:00:00' WHERE id=1204");
+                iva(em, 1204, "100", "16");
+                rep(em, a, b, 2201, 1204, 7, 30, "MXN", "MXN", "116", "116", "116", "0", 1,
+                        "100", "16", "1", null, "VIGENTE", "2.0");
+                return null;
+            });
+            var julioEjercicioAnterior = resumen.consultar(actor, julio, Seccion.IVA, 0);
+            igual("16", documento(julioEjercicioAnterior, "Factura documento", 1204)
+                    .get(columna(julioEjercicioAnterior, "IVA realizadoDR")));
         }
     }
 }

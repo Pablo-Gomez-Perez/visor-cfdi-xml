@@ -2,11 +2,14 @@ package com.kathsoft.visor.app.view.fiscal;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.kathsoft.visor.app.model.dto.fiscal.FiltroFiscal;
+import com.kathsoft.visor.app.service.fiscal.ResumenFiscalService.Seccion;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.event.ActionEvent;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -108,6 +111,56 @@ class PanelResumenFiscalTest {
             tabla.setRowSelectionInterval(0, 0);
             assertEquals(0, seleccionado(panel, false));
         });
+    }
+
+    @Test void origenDesdeIvaSeleccionaFacturaAnteriorYConservaPeriodoSinSesion() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var panel = new PanelResumenFiscal();
+            var pestanas = campo(panel, "pestanas", JTabbedPane.class);
+            pestanas.setSelectedIndex(Seccion.IVA.ordinal());
+            var julio = new FiltroFiscal(1, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31));
+            establecer(panel, "aplicado", julio);
+            JTable tabla = campo(panel, "tablaIva", JTable.class);
+            tabla.setModel(new DefaultTableModel(new Object[][] {
+                { 2008L, 1008L, "USD", "VIGENTE", "RECIBIDO" },
+                { 2002L, 1001L, "MXN", "VIGENTE", "RECIBIDO" }
+            }, new Object[] { "REP documento", "Factura documento", "MonedaDR", "SAT factura", "Sentido factura" }));
+            tabla.getRowSorter().setSortKeys(List.of(new RowSorter.SortKey(1, SortOrder.ASCENDING)));
+            tabla.setRowSelectionInterval(0, 0);
+            assertEquals(1, tabla.convertRowIndexToModel(0));
+            assertEquals(1001, seleccionado(panel, true));
+            assertEquals(2002, seleccionado(panel, false));
+            campo(panel, "origenes", JButton.class).setEnabled(true);
+            invocar(panel, "abrirOrigenes");
+            assertEquals(Seccion.ORIGENES.ordinal(), pestanas.getSelectedIndex());
+            FiltroFiscal contexto = campo(panel, "aplicado", FiltroFiscal.class);
+            assertEquals(julio.desde(), contexto.desde());
+            assertEquals(julio.hasta(), contexto.hasta());
+            // Sin servicio ni sesión, consultar no inicia persistencia. El filtro con documento
+            // se ejercita contra MySQL en MvpFiscalServiceIT para recuperar la factura de junio.
+            assertNull(campo(panel, "servicio", Object.class));
+            assertNull(campo(panel, "sesion", Object.class));
+        });
+    }
+
+    private static void invocar(Object objeto, String nombre) {
+        try {
+            Method metodo = objeto.getClass().getDeclaredMethod(nombre);
+            metodo.setAccessible(true);
+            metodo.invoke(objeto);
+        } catch (ReflectiveOperationException ex) {
+            throw new AssertionError(ex);
+        }
+    }
+
+    private static void establecer(Object objeto, String nombre, Object valor) {
+        try {
+            Field campo = objeto.getClass().getDeclaredField(nombre);
+            campo.setAccessible(true);
+            campo.set(objeto, valor);
+        } catch (ReflectiveOperationException ex) {
+            throw new AssertionError(ex);
+        }
     }
 
     private static long seleccionado(PanelResumenFiscal panel, boolean factura) {

@@ -98,6 +98,7 @@ public class Fr_DatosClasificacionDetalle extends JDialog {
     }
     private void seleccionarConcepto(){
         int v=tablaConceptos.getSelectedRow();if(v<0)return;
+        detalle=null;asignaciones.setRowCount(0);
         Concepto c=filas.get(tablaConceptos.convertRowIndexToModel(v));tipo=Tipo.CONCEPTO;origen=c.id();
         ejecutar(()->new Object[]{servicio.consultar(actor,titular,documento,Tipo.CONCEPTO,c.id()),servicio.impuestos(actor,titular,documento,c.id())},r->{
             @SuppressWarnings("unchecked") List<Impuesto> is=(List<Impuesto>)r[1];filasImpuesto=is;impuestos.setRowCount(0);
@@ -107,6 +108,7 @@ public class Fr_DatosClasificacionDetalle extends JDialog {
     }
     private void seleccionarImpuesto(){
         int v=tablaImpuestos.getSelectedRow();if(v<0)return;
+        detalle=null;asignaciones.setRowCount(0);
         Impuesto i=filasImpuesto.get(tablaImpuestos.convertRowIndexToModel(v));tipo=Tipo.IMPUESTO;origen=i.id();
         ejecutar(()->servicio.consultar(actor,titular,documento,tipo,origen),this::presentar);
     }

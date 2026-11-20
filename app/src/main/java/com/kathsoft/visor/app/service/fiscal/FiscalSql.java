@@ -21,7 +21,7 @@ final class FiscalSql {
           LEFT JOIN categoria_operacion cat ON cat.id=h.categoria_id
           WHERE cd.contribuyente_id=:t AND cd.archivado_en IS NULL
         ), universo AS (
-          SELECT * FROM activos u WHERE u.fecha_emision>=:desde AND u.fecha_emision<:hasta
+          SELECT * FROM activos u WHERE ((:documento=0 AND u.fecha_emision>=:desde AND u.fecha_emision<:hasta) OR u.documento_id=:documento)
         ), conceptos AS (
           SELECT cc.*,cc.importe-COALESCE(cc.descuento,0) neto FROM universo u JOIN cfdi_concepto cc ON cc.documento_id=u.documento_id
         ), distribuidos AS (
@@ -53,7 +53,7 @@ final class FiscalSql {
         """;
     /**
      * Reparte únicamente valores derivados. Cada impuesto mantiene su base e importe originales.
-     * Redondea las partes a seis decimales HALF_UP y asigna el residuo a la última categoría
+     * Trunca las partes a seis decimales hacia cero y asigna el residuo a la última categoría
      * (orden por ID; remanente primero). Así las partes completas reconstruyen el original.
      * Si el neto no es positivo, no inventa una proporción y deja derivados en null.
      */
@@ -61,8 +61,8 @@ final class FiscalSql {
         ,impuestos_partidos AS (
           SELECT p.concepto_id,p.categoria_id,i.id impuesto_id,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota,
             i.base base_original,i.importe impuesto_original,
-            CASE WHEN p.original_neto>0 THEN ROUND(i.base*p.neto/p.original_neto,6) END base_parte,
-            CASE WHEN p.original_neto>0 THEN ROUND(i.importe*p.neto/p.original_neto,6) END impuesto_parte,
+            CASE WHEN p.original_neto>0 THEN TRUNCATE(i.base*p.neto/p.original_neto,6) END base_parte,
+            CASE WHEN p.original_neto>0 THEN TRUNCATE(i.importe*p.neto/p.original_neto,6) END impuesto_parte,
             ROW_NUMBER() OVER(PARTITION BY p.concepto_id,i.id ORDER BY COALESCE(p.categoria_id,0)) posicion,
             COUNT(*) OVER(PARTITION BY p.concepto_id,i.id) cantidad
           FROM partes p JOIN cfdi_concepto_impuesto i ON i.concepto_id=p.concepto_id
@@ -78,6 +78,11 @@ final class FiscalSql {
         if(sql.contains(":t"))q.setParameter("t",f.titular());
         if(sql.contains(":desde"))q.setParameter("desde",Timestamp.valueOf(f.desde().atStartOfDay()));
         if(sql.contains(":hasta"))q.setParameter("hasta",Timestamp.valueOf(f.hasta().plusDays(1).atStartOfDay()));
+        if(sql.contains(":documento"))q.setParameter("documento",f.documento());
+        if(sql.contains(":impuesto"))q.setParameter("impuesto",f.impuesto());
+        if(sql.contains(":movimiento"))q.setParameter("movimiento",f.movimiento());
+        if(sql.contains(":factor"))q.setParameter("factor",f.factor());
+        if(sql.contains(":tasa"))q.setParameter("tasa",f.tasa());
         if(sql.contains(":sentido"))q.setParameter("sentido",f.sentido());
         if(sql.contains(":rfc"))q.setParameter("rfc",f.rfc()+"%");
         if(sql.contains(":naturaleza"))q.setParameter("naturaleza",f.naturaleza());
@@ -87,9 +92,19 @@ final class FiscalSql {
         if(sql.contains(":estado"))q.setParameter("estado",f.estadoSat());
         return q;
     }
+    /** Predicados de una firma tributaria; alias elegidos exclusivamente por código. */
+    static String impuestos(FiltroFiscal f,String alias){
+        String a=alias+".";String r="";
+        if(!f.impuesto().isEmpty())r+=" AND "+a+"impuesto=:impuesto";
+        if(!f.movimiento().isEmpty())r+=" AND "+a+"movimiento=:movimiento";
+        if(!f.factor().isEmpty())r+=" AND "+a+"tipo_factor=:factor";
+        if(f.tasa()!=null)r+=" AND "+a+"tasa_cuota=:tasa";
+        return r;
+    }
     /** Predicados documentales reutilizables, sin limitar la fecha de emisión en el auxiliar de pagos. */
     static String filtros(FiltroFiscal f,String alias){
         String a=alias+".";String r="";
+        if(f.documento()>0)r+=" AND "+a+"documento_id=:documento";
         if(!f.sentido().isEmpty())r+=" AND "+a+"sentido=:sentido";
         if(!f.rfc().isEmpty())r+=" AND "+a+"rfc_tercero LIKE :rfc";
         if(!f.moneda().isEmpty())r+=" AND "+a+"moneda=:moneda";

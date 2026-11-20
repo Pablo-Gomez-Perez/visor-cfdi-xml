@@ -7,17 +7,27 @@ import java.util.Set;
 
 /** Filtros explícitos del papel de trabajo; fechas inclusivas, sin inferir realización por emisión. */
 public record FiltroFiscal(long titular,LocalDate desde,LocalDate hasta,String sentido,String rfc,
-        String naturaleza,long categoria,String moneda,String tipo,String estadoSat) {
+        String naturaleza,long categoria,String moneda,String tipo,String estadoSat,long documento,
+        String impuesto,String movimiento,String factor,java.math.BigDecimal tasa) {
     /** Valida intervalos e identificadores sin construir SQL desde entradas del usuario. */
     public FiltroFiscal {
         Objects.requireNonNull(desde);Objects.requireNonNull(hasta);
         if(titular<=0||desde.isAfter(hasta)||desde.getYear()<1000||hasta.getYear()>9998||categoria<0)throw new IllegalArgumentException("Filtro fiscal inválido");
+        if(documento<0)throw new IllegalArgumentException("Documento inválido");
+        impuesto=limpiar(impuesto);movimiento=limpiar(movimiento);factor=factor==null?"":factor.strip();
+        if(!Set.of("","001","002","003").contains(impuesto)||!Set.of("","TRASLADO","RETENCION").contains(movimiento)||!Set.of("","Tasa","Cuota","Exento").contains(factor)||tasa!=null&&tasa.signum()<0)throw new IllegalArgumentException("Firma tributaria inválida");
         sentido=limpiar(sentido);rfc=limpiar(rfc);naturaleza=limpiar(naturaleza);moneda=limpiar(moneda);tipo=limpiar(tipo);estadoSat=limpiar(estadoSat);
         if(!Set.of("","EMITIDO","RECIBIDO","AMBOS").contains(sentido)||!rfc.matches("[A-Z0-9Ñ&]{0,13}")||!moneda.matches("(?:[A-Z]{3})?"))throw new IllegalArgumentException("Sentido, RFC o moneda inválidos");
         if(!Set.of("","GASTO","COSTO","GASTO_FINANCIERO","INVERSION","INGRESO","OTRA","SIN_CLASIFICAR").contains(naturaleza)||!Set.of("","I","E","N","P","T").contains(tipo))throw new IllegalArgumentException("Naturaleza o tipo inválidos");
         if(!Set.of("","VIGENTE","CANCELADO","NO_ENCONTRADO","DESCONOCIDO","ERROR","SIN_CONSULTA").contains(estadoSat))throw new IllegalArgumentException("Estado SAT inválido");
     }
+    /** Conserva el contrato de consulta sin restricción por documento o firma tributaria. */
+    public FiltroFiscal(long titular,LocalDate desde,LocalDate hasta,String sentido,String rfc,String naturaleza,long categoria,String moneda,String tipo,String estadoSat){
+        this(titular,desde,hasta,sentido,rfc,naturaleza,categoria,moneda,tipo,estadoSat,0,"","","",null);
+    }
     /** Filtro mensual sin restricciones adicionales. */
     public FiltroFiscal(long titular,LocalDate desde,LocalDate hasta){this(titular,desde,hasta,"","","",0,"","","");}
+    /** Retira únicamente la restricción de moneda de cabecera para usar MonedaP o MonedaDR. */
+    public FiltroFiscal sinMoneda(){return new FiltroFiscal(titular,desde,hasta,sentido,rfc,naturaleza,categoria,"",tipo,estadoSat,documento,impuesto,movimiento,factor,tasa);}
     private static String limpiar(String s){return s==null?"":s.strip().toUpperCase(Locale.ROOT);}
 }
