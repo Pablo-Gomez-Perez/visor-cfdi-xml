@@ -21,6 +21,8 @@ public final class ClasificacionOperacionesService {
 
     /** Contexto de persistencia de la aplicación. */
     public ClasificacionOperacionesService(JpaContext jpa){this.jpa=Objects.requireNonNull(jpa);}
+    /** @return clasificación por concepto sobre el mismo contexto transaccional */
+    public com.kathsoft.visor.app.service.fiscal.ClasificacionDetalleService detalleConceptos() { return new com.kathsoft.visor.app.service.fiscal.ClasificacionDetalleService(jpa); }
     public enum Naturaleza { GASTO,COSTO,GASTO_FINANCIERO,INVERSION,INGRESO,OTRA }
     public record Titular(long id,String rfc,String nombre){
         @Override public String toString(){return rfc+" — "+nombre;}

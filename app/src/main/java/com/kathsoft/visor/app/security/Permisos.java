@@ -36,6 +36,9 @@ public final class Permisos {
     public static final String CFDI_CONSULTAR_DETALLE = "CFDI.CONSULTAR_DETALLE";
 
     public static final String OPERACIONES_CONSULTAR = "OPERACIONES.CONSULTAR";
+    public static final String OPERACIONES_CLASIFICAR_DETALLE = "OPERACIONES.CLASIFICAR_DETALLE";
+    public static final String FISCAL_CONSULTAR = "FISCAL.CONSULTAR";
+    public static final String FISCAL_REGISTRAR_EVIDENCIA = "FISCAL.REGISTRAR_EVIDENCIA";
     public static final String OPERACIONES_CLASIFICAR = "OPERACIONES.CLASIFICAR";
     public static final String OPERACIONES_GESTIONAR_CATEGORIAS = "OPERACIONES.GESTIONAR_CATEGORIAS";
 
@@ -85,6 +88,9 @@ public final class Permisos {
         new DefinicionPermiso("CFDI", "CONSULTAR_GRAFO", "Consultar grafo de relaciones documentales activas"),
         new DefinicionPermiso("CFDI", "CONSULTAR_DETALLE", "Consultar datos completos y XML original de comprobantes activos"),
         new DefinicionPermiso("OPERACIONES", "CONSULTAR", "Consultar operaciones y su historial de clasificación"),
+        new DefinicionPermiso("OPERACIONES", "CLASIFICAR_DETALLE", "Distribuir conceptos y tratamientos fiscales con historial"),
+        new DefinicionPermiso("FISCAL", "CONSULTAR", "Consultar auxiliares, terceros y carátulas fiscales con trazabilidad"),
+        new DefinicionPermiso("FISCAL", "REGISTRAR_EVIDENCIA", "Registrar pagos, cobros y ajustes documentados"),
         new DefinicionPermiso("OPERACIONES", "CLASIFICAR", "Asignar, reclasificar y retirar categorías de operaciones"),
         new DefinicionPermiso("OPERACIONES", "GESTIONAR_CATEGORIAS", "Crear y desactivar categorías administrativas"),
         new DefinicionPermiso("CFDI", "IMPORTAR", "Importar CFDI XML para contribuyentes asignados"),
