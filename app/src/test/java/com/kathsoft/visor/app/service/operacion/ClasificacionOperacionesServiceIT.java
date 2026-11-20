@@ -77,7 +77,7 @@ class ClasificacionOperacionesServiceIT {
                     ejecutar(em,"INSERT INTO documento_fiscal(id,clase,uuid,version_estandar,fecha_emision) VALUES (?1,'CFDI',?2,'4.0','2026-06-30 23:59:59')",id,uuid);
                     ejecutar(em,"INSERT INTO cfdi(documento_id,tipo,moneda,subtotal,total) VALUES (?1,?2,?3,?4,?4)",id,i==4?"P":"I",i==4?"XXX":"MXN",i==4?0:100);
                     ejecutar(em,"INSERT INTO documento_participante(documento_id,rol,rfc) VALUES (?1,'E','AAA010101AAA'),(?1,'R','BBB010101BBB')",id);
-                    ejecutar(em,"INSERT INTO contribuyente_documento(contribuyente_id,documento_id,sentido) VALUES (?1,?2,'RECIBIDO')",i==5?b:a,id);
+                    ejecutar(em,"INSERT INTO contribuyente_documento(contribuyente_id,documento_id,sentido) VALUES (?1,?2,?3)",i==5?b:a,id,i==5?"EMITIDO":"RECIBIDO");
                 }
                 ejecutar(em,"INSERT INTO contribuyente_documento(contribuyente_id,documento_id,sentido) VALUES (?1,960001,'EMITIDO')",b);
                 ejecutar(em,"UPDATE contribuyente_documento SET archivado_en=CURRENT_TIMESTAMP(6) WHERE contribuyente_id=?1 AND documento_id=960003",a);
