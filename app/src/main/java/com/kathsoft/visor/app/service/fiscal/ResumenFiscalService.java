@@ -13,7 +13,7 @@ public final class ResumenFiscalService {
     /** Contexto de la aplicación; constructor sin consultas. */
     public ResumenFiscalService(JpaContext jpa){this.jpa=Objects.requireNonNull(jpa);}
     /** Vistas consolidadas, incluyendo originales y conciliación RF-022. */
-    public enum Seccion { GENERALES, INGRESOS, EGRESOS, IVA, IEPS, RETENCIONES, TERCEROS, FINANCIERO, INCIDENCIAS, ORIGENES, IMPUESTOS, GLOBALES, IMPUESTOS_PAGO, TOTALES, CONCILIACION, IVA_RESUMEN, IVA_MANUAL, IMPUESTOS_DR, CONCILIACION_DR_P, CONCILIACION_TOTALES }
+    public enum Seccion { GENERALES, INGRESOS, EGRESOS, IVA, IEPS, RETENCIONES, TERCEROS, FINANCIERO, INCIDENCIAS, ORIGENES, IMPUESTOS, GLOBALES, IMPUESTOS_PAGO, TOTALES, CONCILIACION, IVA_RESUMEN, IVA_MANUAL, IMPUESTOS_DR, CONCILIACION_DR_P, CONCILIACION_TOTALES, TRIBUTOS_AGRUPADOS }
 
     /** Lista únicamente contribuyentes asignados y revalida el permiso fiscal. */
     @SuppressWarnings("unchecked")
@@ -30,8 +30,10 @@ public final class ResumenFiscalService {
         return switch(seccion){
             case CONCILIACION_DR_P->new ConciliacionPagosService(jpa).documentosContraPago(actor,f,pagina);
             case CONCILIACION_TOTALES->new ConciliacionPagosService(jpa).totales(actor,f,pagina);
+            case TRIBUTOS_AGRUPADOS->new ImpuestosAgrupadosService(jpa).consultar(actor,f,pagina);
             case EGRESOS->new CaratulasService(jpa).egresos(actor,f,pagina);
             case INGRESOS->new CaratulasService(jpa).ingresos(actor,f,pagina);
+            case IEPS->new CaratulasService(jpa).ieps(actor,f,pagina);
             case IVA_RESUMEN->new AuxiliarIvaService(jpa).resumir(actor,f,pagina);
             case IVA_MANUAL->new AuxiliarIvaService(jpa).consultarManuales(actor,f,pagina);
             case IMPUESTOS_DR->new ImpuestosService(jpa).consultar(actor,f,ImpuestosService.Nivel.PAGO_DOCUMENTO,pagina);
@@ -52,8 +54,8 @@ public final class ResumenFiscalService {
                 }else if(seccion==Seccion.ORIGENES){
                     sql=FiscalSql.BASE+FiscalSql.IMPUESTOS_DISTRIBUIDOS+" SELECT u.documento_id,u.uuid,p.concepto_id,cc.ordinal,cc.clave_prod_serv,cc.descripcion,p.naturaleza,p.categoria,p.origen,p.neto,p.original_neto,u.moneda,u.sentido,u.tipo,u.estado_sat,i.impuesto_id,i.impuesto,i.movimiento,i.tipo_factor,i.base_original,i.tasa_cuota,i.impuesto_original,i.base_distribuida,i.impuesto_distribuido FROM partes p JOIN universo u ON u.documento_id=p.documento_id LEFT JOIN conceptos cc ON cc.id=p.concepto_id LEFT JOIN impuestos_distribuidos i ON i.concepto_id=p.concepto_id AND i.categoria_id<=>p.categoria_id WHERE 1=1"+FiscalSql.filtros(f,"u")+FiscalSql.impuestos(f,"i")+(!f.naturaleza().isEmpty()?" AND p.naturaleza=:naturaleza":"")+(f.categoria()>0?" AND p.categoria_id=:categoria":"")+" ORDER BY u.documento_id,p.concepto_id,p.categoria_id,i.impuesto_id";
                     columnas=List.of("Documento","UUID","Concepto ID","Ordinal","Producto","Descripción","Naturaleza","Categoría","Origen clasificación","Neto asignado","Neto original concepto","Moneda","Sentido","Tipo","SAT","Impuesto ID","Código","Movimiento","Factor","Base original","Tasa/cuota","Impuesto original","Base distribuida derivada","Impuesto distribuido derivado");
-                }else if(seccion==Seccion.IEPS||seccion==Seccion.RETENCIONES){
-                    sql=FiscalSql.BASE+" SELECT u.sentido,u.tipo,u.moneda,u.estado_sat,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota,COUNT(DISTINCT u.documento_id),SUM(i.base),SUM(i.importe) FROM universo u JOIN conceptos cc ON cc.documento_id=u.documento_id JOIN cfdi_concepto_impuesto i ON i.concepto_id=cc.id WHERE "+(seccion==Seccion.IEPS?"i.impuesto='003'":"i.movimiento='RETENCION'")+FiscalSql.filtros(f,"u")+" GROUP BY u.sentido,u.tipo,u.moneda,u.estado_sat,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota ORDER BY u.sentido,u.tipo,u.moneda,u.estado_sat,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota";
+                }else if(seccion==Seccion.RETENCIONES){
+                    sql=FiscalSql.BASE+" SELECT u.sentido,u.tipo,u.moneda,u.estado_sat,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota,COUNT(DISTINCT u.documento_id),SUM(i.base),SUM(i.importe) FROM universo u JOIN conceptos cc ON cc.documento_id=u.documento_id JOIN cfdi_concepto_impuesto i ON i.concepto_id=cc.id WHERE i.movimiento='RETENCION'"+FiscalSql.filtros(f,"u")+" GROUP BY u.sentido,u.tipo,u.moneda,u.estado_sat,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota ORDER BY u.sentido,u.tipo,u.moneda,u.estado_sat,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota";
                     columnas=List.of("Sentido","Tipo","Moneda","SAT","Impuesto","Movimiento","Factor","Tasa/cuota","Documentos","Bases originales","Importes originales");
                 }else{
                     sql=FiscalSql.BASE+"""

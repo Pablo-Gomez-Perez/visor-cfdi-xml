@@ -328,6 +328,11 @@ class MvpFiscalServiceIT {
             igual("2000", gastoResumen.filas().get(0).get(columna(gastoResumen, "Neto clasificado")));
             igual("15000", inversionResumen.filas().get(0).get(columna(inversionResumen, "Neto clasificado")));
             igual("1600", costoResumen.filas().get(0).get(columna(costoResumen, "IVA declarado distribuido")));
+            var tributosCosto = resumen.consultar(actor, categoria(a, costo), Seccion.TRIBUTOS_AGRUPADOS, 0);
+            assertEquals(1, tributosCosto.filas().size());
+            igual("10000", tributosCosto.filas().get(0).get(columna(tributosCosto, "Base distribuida DERIVADA")));
+            igual("1600", tributosCosto.filas().get(0).get(columna(tributosCosto, "Impuesto distribuido DERIVADO")));
+            assertEquals("PENDIENTE", tributosCosto.filas().get(0).get(columna(tributosCosto, "Tratamiento fiscal")));
             var ieps = resumen.consultar(actor, junio, Seccion.IEPS, 0);
             assertEquals(1, ieps.filas().size());
             assertEquals("Cuota", ieps.filas().get(0).get(columna(ieps, "Factor")));
@@ -493,8 +498,23 @@ class MvpFiscalServiceIT {
                            (21000,'RETENCION',2,'002',NULL,NULL,NULL,4)
                     """);
                 ejecutar(em, "INSERT INTO pago_fiscal_total_impuesto(documento_id,atributo,importe_mxn) VALUES (2100,'TotalRetencionesISR',10),(2100,'TotalRetencionesIVA',4)");
+                ejecutar(em, """
+                    INSERT INTO pago_fiscal_impuesto_documento(pago_documento_id,movimiento,ordinal,impuesto,tipo_factor,base,tasa_cuota,importe)
+                    VALUES (?1,'TRASLADO',2,'003','Cuota',10,2,20)
+                    """, dr);
+                ejecutar(em, """
+                    INSERT INTO pago_fiscal_impuesto_pago(pago_fiscal_id,movimiento,ordinal,impuesto,tipo_factor,base,tasa_cuota,importe)
+                    VALUES (21000,'TRASLADO',2,'003','Cuota',10,2,20)
+                    """);
                 return null;
             });
+            var iepsJulio = resumen.consultar(actor, julio, Seccion.IEPS, 0);
+            var iepsPago = iepsJulio.filas().stream()
+                    .filter(f -> "REP_FECHA_PAGO".equals(f.get(columna(iepsJulio, "Fuente temporal"))))
+                    .findFirst().orElseThrow();
+            igual("10", iepsPago.get(columna(iepsJulio, "Bases DR originales")));
+            igual("20", iepsPago.get(columna(iepsJulio, "IEPS DR original vinculado")));
+            assertEquals("DR_DOCUMENTAL_IEPS_PENDIENTE_REGLA", iepsPago.get(columna(iepsJulio, "Estado auxiliar")));
             for (int i = 1; i <= 4; i++) operaciones.crearCategoria(actor, a, "RESIDUO_" + i, "Residuo sintético " + i, Naturaleza.OTRA);
             var categoriasResiduo = operaciones.categorias(actor, a).stream().filter(c -> c.clave().startsWith("RESIDUO_"))
                     .map(c -> new Asignacion(c.id(), BigDecimal.ONE, "Parte sintética del neto")).toList();
@@ -507,6 +527,11 @@ class MvpFiscalServiceIT {
             assertTrue(residuo.filas().stream().allMatch(f -> ((BigDecimal) f.get(columna(residuo, "Impuesto distribuido derivado"))).signum() >= 0));
             igual("0.000002", residuo.filas().stream().map(f -> (BigDecimal) f.get(columna(residuo, "Impuesto distribuido derivado"))).reduce(BigDecimal.ZERO, BigDecimal::add));
             igual("4", residuo.filas().stream().map(f -> (BigDecimal) f.get(columna(residuo, "Base distribuida derivada"))).reduce(BigDecimal.ZERO, BigDecimal::add));
+            var tributosResiduo = resumen.consultar(actor, filtroResiduo, Seccion.TRIBUTOS_AGRUPADOS, 0);
+            assertEquals(4, tributosResiduo.filas().size());
+            igual("0.000002", tributosResiduo.filas().stream()
+                    .map(f -> (BigDecimal) f.get(columna(tributosResiduo, "Impuesto distribuido DERIVADO")))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
             operaciones.clasificar(actor, a, List.of(new Seleccion(1201, 0)), gasto, "CFDI 3.3 sin ObjetoImp");
             var filtroHistorico = new FiltroFiscal(a, julio.desde(), julio.hasta(), "RECIBIDO", "", "", 0,
                     "MXN", "I", "VIGENTE", 1201, "", "", "", null);

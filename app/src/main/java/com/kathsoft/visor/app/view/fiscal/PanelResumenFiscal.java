@@ -29,8 +29,8 @@ public class PanelResumenFiscal extends JPanel {
     private static final long serialVersionUID=1L;
     private JPanel acciones,filtros;
     private JTabbedPane pestanas;
-    private JTable tablaConciliacionDrP,tablaConciliacionTotales;
-    private JScrollPane scrollConciliacionDrP,scrollConciliacionTotales;
+    private JTable tablaConciliacionDrP,tablaConciliacionTotales,tablaTributosAgrupados;
+    private JScrollPane scrollConciliacionDrP,scrollConciliacionTotales,scrollTributosAgrupados;
     private JTable tablaIvaResumen,tablaIvaManual,tablaImpuestosDr;
     private JScrollPane scrollIvaResumen,scrollIvaManual,scrollImpuestosDr;
     private JTable tablaGenerales,tablaIngresos,tablaEgresos,tablaIva,tablaIeps,tablaRetenciones,tablaTerceros,tablaFinanciero,tablaIncidencias,tablaOrigenes,tablaImpuestos,tablaGlobales,tablaImpuestosPago,tablaTotales,tablaConciliacion;
@@ -68,6 +68,8 @@ public class PanelResumenFiscal extends JPanel {
         tablaConciliacionDrP=new JTable();tablaConciliacionTotales=new JTable();
         scrollConciliacionDrP=new JScrollPane(tablaConciliacionDrP);scrollConciliacionTotales=new JScrollPane(tablaConciliacionTotales);
         pestanas.addTab("Conciliación DR / P",scrollConciliacionDrP);pestanas.addTab("Conciliación Totales MXN",scrollConciliacionTotales);
+        tablaTributosAgrupados=new JTable();scrollTributosAgrupados=new JScrollPane(tablaTributosAgrupados);
+        pestanas.addTab("Tributos por categoría",scrollTributosAgrupados);
         pestanas.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         lblTitular=new JLabel("Contribuyente");titular=new JComboBox<>();lblPeriodo=new JLabel("Periodo");periodo=new JComboBox<>(new String[]{"Mes","Ejercicio","Rango"});lblAnio=new JLabel("Año");anio=new JSpinner(new SpinnerNumberModel(LocalDate.now().getYear(),1000,9998,1));lblMes=new JLabel("Mes");mes=new JSpinner(new SpinnerNumberModel(LocalDate.now().getMonthValue(),1,12,1));
         lblDesde=new JLabel("Desde");desde=new JFormattedTextField();lblHasta=new JLabel("Hasta");hasta=new JFormattedTextField();
@@ -110,7 +112,7 @@ public class PanelResumenFiscal extends JPanel {
         controles();
     }
     private boolean autorizado(){return servicio!=null&&sesion!=null&&permisos.contains(Permisos.FISCAL_CONSULTAR);}
-    private List<JTable> tablas(){return List.of(tablaGenerales,tablaIngresos,tablaEgresos,tablaIva,tablaIeps,tablaRetenciones,tablaTerceros,tablaFinanciero,tablaIncidencias,tablaOrigenes,tablaImpuestos,tablaGlobales,tablaImpuestosPago,tablaTotales,tablaConciliacion,tablaIvaResumen,tablaIvaManual,tablaImpuestosDr,tablaConciliacionDrP,tablaConciliacionTotales);}
+    private List<JTable> tablas(){return List.of(tablaGenerales,tablaIngresos,tablaEgresos,tablaIva,tablaIeps,tablaRetenciones,tablaTerceros,tablaFinanciero,tablaIncidencias,tablaOrigenes,tablaImpuestos,tablaGlobales,tablaImpuestosPago,tablaTotales,tablaConciliacion,tablaIvaResumen,tablaIvaManual,tablaImpuestosDr,tablaConciliacionDrP,tablaConciliacionTotales,tablaTributosAgrupados);}
     private JTable tabla(){return tablas().get(pestanas.getSelectedIndex());}
     private Seccion seccion(){return Seccion.values()[pestanas.getSelectedIndex()];}
     private void limpiar(){datos=null;for(JTable t:tablas())t.setModel(new DefaultTableModel());}
@@ -153,7 +155,9 @@ public class PanelResumenFiscal extends JPanel {
         if(!origenes.isEnabled()||aplicado==null)return;
         Seccion actual=seccion();
         boolean pagos=actual==Seccion.IVA_RESUMEN && seleccionado("Fuente temporal","").equals("REP_FECHA_PAGO");
-        boolean finanzas=seleccionado("Origen del periodo","").startsWith("FINANCIERO");
+        boolean iepsDr=actual==Seccion.IEPS && seleccionado("Fuente temporal","").equals("REP_FECHA_PAGO");
+        boolean finanzas=seleccionado("Origen del periodo","").startsWith("FINANCIERO")
+                ||actual==Seccion.IEPS && seleccionado("Fuente temporal","").equals("AJUSTE_ADMINISTRATIVO");
         long doc=actual==Seccion.IVA?documentoSeleccionado(true):documentoSeleccionado(false);
         String tasa=seleccionado("Tasa/cuota","");
         String impuesto=seleccionado("Código",seleccionado("Impuesto",""));
@@ -161,7 +165,7 @@ public class PanelResumenFiscal extends JPanel {
         if(!Set.of("001","002","003").contains(impuesto))impuesto="";
         String categoria=seleccionado("Categoría ID","");
         FiltroFiscal f=new FiltroFiscal(aplicado.titular(),aplicado.desde(),aplicado.hasta(),seleccionado("Sentido",seleccionado("Sentido factura",aplicado.sentido())),seleccionado("RFC",aplicado.rfc()),seleccionado("Naturaleza",aplicado.naturaleza()),categoria.isEmpty()?aplicado.categoria():Long.parseLong(categoria),seleccionado("Moneda",seleccionado("MonedaDR",aplicado.moneda())),seleccionado("Tipo",aplicado.tipo()),seleccionado("SAT",seleccionado("SAT factura",aplicado.estadoSat())),doc>0?doc:aplicado.documento(),impuesto,seleccionado("Movimiento",aplicado.movimiento()),seleccionado("Factor",aplicado.factor()),tasa.isEmpty()?aplicado.tasa():new java.math.BigDecimal(tasa));
-        cargando=true;pestanas.setSelectedIndex((pagos?Seccion.IVA:finanzas?Seccion.FINANCIERO:Seccion.ORIGENES).ordinal());cargando=false;consultar(f,0);
+        cargando=true;pestanas.setSelectedIndex((pagos?Seccion.IVA:iepsDr?Seccion.IMPUESTOS_DR:finanzas?Seccion.FINANCIERO:Seccion.ORIGENES).ordinal());cargando=false;consultar(f,0);
     }
     private void exportar(){
         if(!exportar.isEnabled())return;JFileChooser chooser=new JFileChooser();chooser.setSelectedFile(new java.io.File("auxiliar-"+seccion().name().toLowerCase(java.util.Locale.ROOT)+".csv"));

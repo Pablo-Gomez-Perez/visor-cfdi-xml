@@ -60,6 +60,62 @@ public final class CaratulasService {
                 "Documental por emisión y proporciones administrativas por fecha de movimiento separadas. Incluye pagos de facturas anteriores. IVA proporcional no es IVA acreditable confirmado; consulte REP, manuales y tratamientos.");
         });
     }
+
+    /**
+     * IEPS documental, desglose DR ligado a pagos y ajustes administrativos en fuentes separadas.
+     * El importe DR es el original del complemento; no se convierte en IEPS fiscalmente causado
+     * ni se suma a la factura. La ausencia de fundamento específico mantiene pendiente el efecto.
+     */
+    public TablaFiscal ieps(Long actor,FiltroFiscal f,int pagina){
+        return jpa.enTransaccion(em->{
+            AccesoFiscal.exigir(em,actor,f.titular(),Permisos.FISCAL_CONSULTAR);
+            String sinFirmaAjuste=(!f.impuesto().isEmpty()&&!f.impuesto().equals("003"))
+                    ||!f.movimiento().isEmpty()||!f.factor().isEmpty()||f.tasa()!=null?" AND 1=0":"";
+            String sql=FiscalSql.BASE+"""
+                SELECT u.sentido,u.tipo,u.moneda,u.estado_sat,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota,
+                  COUNT(DISTINCT u.documento_id),SUM(i.base),SUM(i.importe),NULL,NULL,NULL,
+                  GROUP_CONCAT(DISTINCT COALESCE((SELECT GROUP_CONCAT(DISTINCT t.clave ORDER BY t.clave SEPARATOR '+')
+                    FROM clasificacion_impuesto_concepto ci JOIN tratamiento_impuesto t ON t.id=ci.tratamiento_id
+                    WHERE ci.contribuyente_id=:t AND ci.impuesto_concepto_id=i.id),'PENDIENTE') SEPARATOR '; '),
+                  'CFDI_EMISION',CASE WHEN u.estado_sat='VIGENTE' THEN 'DOCUMENTAL_SIN_DETERMINACION_IEPS' ELSE 'REVISAR_ESTADO_SAT' END
+                FROM universo u JOIN conceptos cc ON cc.documento_id=u.documento_id
+                JOIN cfdi_concepto_impuesto i ON i.concepto_id=cc.id
+                WHERE u.tipo IN ('I','E','N') AND i.impuesto='003'
+                """+FiscalSql.filtros(f,"u")+FiscalSql.impuestos(f,"i")+"""
+                GROUP BY u.sentido,u.tipo,u.moneda,u.estado_sat,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota
+                UNION ALL
+                SELECT factura.sentido,'P',pd.moneda,rep.estado_sat,i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota,
+                  COUNT(DISTINCT factura.documento_id),NULL,NULL,SUM(i.base),SUM(i.importe),NULL,
+                  'CONSULTAR_TRATAMIENTO_FACTURA','REP_FECHA_PAGO',
+                  CASE WHEN factura.estado_sat='VIGENTE' AND rep.estado_sat='VIGENTE'
+                    THEN 'DR_DOCUMENTAL_IEPS_PENDIENTE_REGLA' ELSE 'REVISAR_ESTADO_SAT' END
+                FROM pago_fiscal p JOIN pago_fiscal_documento pd ON pd.pago_fiscal_id=p.id
+                JOIN pago_fiscal_impuesto_documento i ON i.pago_documento_id=pd.id
+                JOIN activos rep ON rep.documento_id=p.documento_id AND rep.tipo='P'
+                JOIN documento_fiscal df ON df.uuid=pd.uuid_documento
+                JOIN activos factura ON factura.documento_id=df.id AND factura.tipo='I'
+                WHERE p.fecha_pago>=:desde AND p.fecha_pago<:hasta AND i.impuesto='003'
+                """+FiscalSql.filtros(f.sinMoneda(),"factura")
+                    +(f.moneda().isEmpty()?"":" AND pd.moneda=:moneda")+FiscalSql.impuestos(f,"i")+"""
+                GROUP BY factura.sentido,pd.moneda,rep.estado_sat,factura.estado_sat,
+                  i.impuesto,i.movimiento,i.tipo_factor,i.tasa_cuota
+                UNION ALL
+                SELECT factura.sentido,'I',o.moneda,factura.estado_sat,'003',NULL,NULL,NULL,
+                  COUNT(DISTINCT factura.documento_id),NULL,NULL,NULL,NULL,SUM(a.importe_moneda_obligacion),
+                  'CONSULTAR_TRATAMIENTO_FACTURA','AJUSTE_ADMINISTRATIVO','REVISAR_EFECTO_IEPS'
+                FROM activos factura JOIN obligacion o ON o.documento_id=factura.documento_id
+                  AND o.contribuyente_id=:t JOIN ajuste_obligacion a ON a.obligacion_id=o.id
+                WHERE factura.tipo='I' AND a.fecha_ajuste>=DATE(:desde) AND a.fecha_ajuste<DATE(:hasta)
+                  AND EXISTS(SELECT 1 FROM cfdi_concepto cc JOIN cfdi_concepto_impuesto ci ON ci.concepto_id=cc.id
+                    WHERE cc.documento_id=factura.documento_id AND ci.impuesto='003')
+                """+FiscalSql.filtros(f,"factura")+sinFirmaAjuste+"""
+                GROUP BY factura.sentido,o.moneda,factura.estado_sat
+                ORDER BY 16,1,2,3,4,5,6,7,8
+                """;
+            return ImpuestosService.tabla(em,sql,f,pagina,List.of("Sentido","Tipo","Moneda","SAT","Impuesto","Movimiento","Factor","Tasa/cuota","Documentos","Bases originales","Importes originales","Bases DR originales","IEPS DR original vinculado","Ajustes de saldo documentados","Tratamientos registrados","Fuente temporal","Estado auxiliar"),
+                    "IEPS documental, DR de REP y ajustes son fuentes independientes. El DR no determina por sí solo causación ni acreditamiento IEPS; revise bases, tratamientos y diferencias en auxiliares originales.");
+        });
+    }
     private static String filtrosParte(FiltroFiscal f){return (!f.naturaleza().isEmpty()?" AND p.naturaleza=:naturaleza":"")+(f.categoria()>0?" AND p.categoria_id=:categoria":"");}
 
     /**

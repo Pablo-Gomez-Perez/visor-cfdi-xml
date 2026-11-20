@@ -42,7 +42,9 @@ class PanelResumenFiscalTest {
             for (int i = 0; i < pestanas.getTabCount(); i++) nombres.add(pestanas.getTitleAt(i));
             assertTrue(nombres.containsAll(List.of("Periodo", "Ingresos", "Egresos", "IVA por pago", "IEPS",
                     "ISR y retenciones", "Terceros", "Financiero", "Incidencias", "Orígenes",
-                    "Impuestos concepto", "Impuestos globales", "Impuestos pago", "Totales originales", "Conciliación")));
+                    "Impuestos concepto", "Impuestos globales", "Impuestos pago", "Totales originales", "Conciliación",
+                    "Tributos por categoría")));
+            assertEquals(Seccion.values().length, pestanas.getTabCount());
             assertEquals(JTabbedPane.SCROLL_TAB_LAYOUT, pestanas.getTabLayoutPolicy());
             for (JPanel auxiliar : componentes(panel, JPanel.class)) {
                 if (auxiliar == campo(panel, "acciones", JPanel.class) || auxiliar == campo(panel, "filtros", JPanel.class))
@@ -140,6 +142,23 @@ class PanelResumenFiscalTest {
             // se ejercita contra MySQL en MvpFiscalServiceIT para recuperar la factura de junio.
             assertNull(campo(panel, "servicio", Object.class));
             assertNull(campo(panel, "sesion", Object.class));
+        });
+    }
+
+    @Test void iepsVinculadoPorRepAbreImpuestoDrOriginal() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            var panel = new PanelResumenFiscal();
+            var pestanas = campo(panel, "pestanas", JTabbedPane.class);
+            pestanas.setSelectedIndex(Seccion.IEPS.ordinal());
+            establecer(panel, "aplicado", new FiltroFiscal(1, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31)));
+            JTable tabla = campo(panel, "tablaIeps", JTable.class);
+            tabla.setModel(new DefaultTableModel(new Object[][] {
+                    { "REP_FECHA_PAGO", "003", "TRASLADO", "Cuota", "2", "MXN", "VIGENTE", "RECIBIDO", "P" }
+            }, new Object[] { "Fuente temporal", "Impuesto", "Movimiento", "Factor", "Tasa/cuota", "Moneda", "SAT", "Sentido", "Tipo" }));
+            tabla.setRowSelectionInterval(0, 0);
+            campo(panel, "origenes", JButton.class).setEnabled(true);
+            invocar(panel, "abrirOrigenes");
+            assertEquals(Seccion.IMPUESTOS_DR.ordinal(), pestanas.getSelectedIndex());
         });
     }
 
