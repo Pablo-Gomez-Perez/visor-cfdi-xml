@@ -95,7 +95,7 @@ public final class TercerosFiscalService {
                   GROUP BY fac.documento_id
                 ),notas_sugerencias AS (
                   SELECT fac.documento_id,
-                    COUNT(DISTINCT nc.id) notas_detectadas,
+                    COUNT(DISTINCT nc.documento_id) notas_detectadas,
                     COUNT(DISTINCT CASE WHEN nc.estado_sat='VIGENTE' AND cc.total>COALESCE(ap.importe,0)
                       THEN nc.id END) notas_pendientes,
                     SUM(CASE WHEN nc.estado_sat='VIGENTE' AND cc.moneda=fac.moneda
