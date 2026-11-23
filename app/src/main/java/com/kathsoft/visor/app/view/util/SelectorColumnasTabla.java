@@ -10,8 +10,11 @@ import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.prefs.Preferences;
 
-import javax.swing.JCheckBoxMenuItem;
-import javax.swing.JMenuItem;
+import javax.swing.JCheckBox;
+import javax.swing.JButton;
+import javax.swing.BoxLayout;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JPopupMenu;
 import javax.swing.JTable;
 import javax.swing.table.TableColumn;
@@ -97,14 +100,19 @@ public final class SelectorColumnasTabla {
         final Estado estado=previo;
         JPopupMenu menu=new JPopupMenu("Columnas visibles");
         if(tabla.getModel().getColumnCount()==0){
-            JMenuItem sinDatos=new JMenuItem("Realice una consulta primero");
+            JButton sinDatos=new JButton("Realice una consulta primero");
             sinDatos.setEnabled(false);
             menu.add(sinDatos);
             return menu;
         }
+        // Casillas estándar dentro de un scroll: permite seleccionar muchas sin
+        // cerrar el emergente, incluso con 25+ columnas y pantalla pequeña.
+        JPanel opciones=new JPanel();
+        opciones.setLayout(new BoxLayout(opciones,BoxLayout.Y_AXIS));
         for(int i=0;i<tabla.getModel().getColumnCount();i++){
             String titulo=tabla.getModel().getColumnName(i);
-            JCheckBoxMenuItem item=new JCheckBoxMenuItem(titulo,!estado.ocultas.contains(titulo));
+            JCheckBox item=new JCheckBox(titulo,!estado.ocultas.contains(titulo));
+            item.setAlignmentX(java.awt.Component.LEFT_ALIGNMENT);
             item.addActionListener(e->{
                 LinkedHashSet<String> nuevas=new LinkedHashSet<>(estado.ocultas);
                 if(item.isSelected())nuevas.remove(titulo);
@@ -117,14 +125,20 @@ public final class SelectorColumnasTabla {
                 preferencias.put(estado.clave,String.join(SEPARADOR,nuevas));
                 aplicar(tabla,estado);
             });
-            menu.add(item);
+            opciones.add(item);
         }
-        menu.addSeparator();
-        JMenuItem todas=new JMenuItem("Mostrar todas");
+        JScrollPane lista=new JScrollPane(opciones);
+        lista.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        lista.setPreferredSize(new java.awt.Dimension(310,
+            Math.min(340,Math.max(60,30*tabla.getModel().getColumnCount()))));
+        menu.add(lista);
+        JButton todas=new JButton("Mostrar todas");
         todas.addActionListener(e->{
             estado.ocultas=new LinkedHashSet<>();
             preferencias.remove(estado.clave);
             aplicar(tabla,estado);
+            for(java.awt.Component componente:opciones.getComponents())
+                if(componente instanceof JCheckBox check)check.setSelected(true);
         });
         menu.add(todas);
         return menu;
