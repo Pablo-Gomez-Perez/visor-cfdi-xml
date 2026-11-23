@@ -3,6 +3,7 @@ package com.kathsoft.visor.app.view.fiscal;
 import com.kathsoft.visor.app.service.fiscal.EvidenciaFinancieraService;
 import com.kathsoft.visor.app.service.fiscal.EvidenciaFinancieraService.AplicacionRegistrada;
 import com.kathsoft.visor.app.service.fiscal.EvidenciaFinancieraService.ReferenciaRep;
+import com.kathsoft.visor.app.service.fiscal.EvidenciaFinancieraService.NotaRelacionada;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -22,6 +23,8 @@ public class Fr_DatosEvidencia extends JDialog {
 	private JCheckBox vincularRegistrado;
 	private JComboBox<AplicacionRegistrada> registrados;
 	private JComboBox<String> tipoAjuste;
+	private JComboBox<NotaRelacionada> notasRelacionadas;
+	private JLabel lblNotasRelacionadas;
 	private JFormattedTextField fechaPago, fechaAjuste;
 	private JTextField moneda, importePago, importeFactura, referencia, motivoPago, soporte, importeAjuste,
 			motivoAjuste;
@@ -35,7 +38,7 @@ public class Fr_DatosEvidencia extends JDialog {
 	private boolean ocupado;
 	private int generacion;
 
-	private record Opciones(List<ReferenciaRep> referencias, List<AplicacionRegistrada> aplicaciones) {
+	private record Opciones(List<ReferenciaRep> referencias, List<AplicacionRegistrada> aplicaciones, List<NotaRelacionada> notas) {
 	}
 
 	/** Constructor visual público sin persistencia, archivos ni red. */
@@ -71,6 +74,9 @@ public class Fr_DatosEvidencia extends JDialog {
 		referencia = new JTextField();
 		lblMotivoPago = new JLabel("Justificación");
 		motivoPago = new JTextField();
+		lblNotasRelacionadas = new JLabel("Nota de crédito detectada");
+		notasRelacionadas = new JComboBox<>();
+		notasRelacionadas.setToolTipText("CFDI E relacionados (TipoRelacion 01): seleccione para completar UUID e importe disponible.");
 		lblFechaAjuste = new JLabel("Fecha del ajuste");
 		fechaAjuste = new JFormattedTextField();
 		lblTipoAjuste = new JLabel("Tipo");
@@ -126,11 +132,13 @@ public class Fr_DatosEvidencia extends JDialog {
 		a.setAutoCreateGaps(true);
 		a.setAutoCreateContainerGaps(true);
 		a.setHorizontalGroup(a.createSequentialGroup()
-				.addGroup(a.createParallelGroup().addComponent(lblFechaAjuste).addComponent(lblTipoAjuste)
+				.addGroup(a.createParallelGroup().addComponent(lblNotasRelacionadas).addComponent(lblFechaAjuste).addComponent(lblTipoAjuste)
 						.addComponent(lblSoporte).addComponent(lblImporteAjuste).addComponent(lblMotivoAjuste))
-				.addGroup(a.createParallelGroup().addComponent(fechaAjuste).addComponent(tipoAjuste)
+				.addGroup(a.createParallelGroup().addComponent(notasRelacionadas).addComponent(fechaAjuste).addComponent(tipoAjuste)
 						.addComponent(soporte).addComponent(importeAjuste).addComponent(motivoAjuste)));
 		a.setVerticalGroup(a.createSequentialGroup()
+				.addGroup(a.createParallelGroup(GroupLayout.Alignment.BASELINE).addComponent(lblNotasRelacionadas)
+						.addComponent(notasRelacionadas))
 				.addGroup(a.createParallelGroup(GroupLayout.Alignment.BASELINE).addComponent(lblFechaAjuste)
 						.addComponent(fechaAjuste))
 				.addGroup(a.createParallelGroup(GroupLayout.Alignment.BASELINE).addComponent(lblTipoAjuste)
@@ -173,6 +181,17 @@ public class Fr_DatosEvidencia extends JDialog {
 				presentarRep();
 			controles();
 		});
+		notasRelacionadas.addActionListener(e -> {
+			NotaRelacionada nota = (NotaRelacionada) notasRelacionadas.getSelectedItem();
+			if(nota!=null){
+				tipoAjuste.setSelectedItem("NOTA_CREDITO");
+				soporte.setText(nota.uuid());
+				importeAjuste.setText(nota.disponible().signum()>0?nota.disponible().toPlainString():"");
+				fechaAjuste.setText(nota.emision().toString());
+				estado.setText("Nota relacionada detectada. Confirme el importe aplicable y la fecha real del ajuste.");
+			}
+			controles();
+		});
 		pestanas.addChangeListener(e -> controles());
 		guardar.addActionListener(e -> guardar());
 		cerrar.addActionListener(e -> dispose());
@@ -189,13 +208,15 @@ public class Fr_DatosEvidencia extends JDialog {
 		int token = ++generacion;
 		rep.removeAllItems();
 		registrados.removeAllItems();
+		notasRelacionadas.removeAllItems();
 		vincularRegistrado.setSelected(false);
 		controles();
 		new SwingWorker<Opciones, Void>() {
 			@Override
 			protected Opciones doInBackground() {
 				return new Opciones(servicio.referencias(actor, titular, documento),
-						servicio.aplicacionesNoVinculadas(actor, titular, documento));
+						servicio.aplicacionesNoVinculadas(actor, titular, documento),
+						servicio.notasRelacionadas(actor, titular, documento));
 			}
 
 			@Override
@@ -209,6 +230,8 @@ public class Fr_DatosEvidencia extends JDialog {
 						rep.addItem(r);
 					for (AplicacionRegistrada a : opciones.aplicaciones())
 						registrados.addItem(a);
+					notasRelacionadas.addItem(null);
+					for (NotaRelacionada n : opciones.notas()) notasRelacionadas.addItem(n);
 					ocupado = false;
 					controles();
 				} catch (Exception e) {
@@ -248,6 +271,7 @@ public class Fr_DatosEvidencia extends JDialog {
 		vincularRegistrado.setEnabled(libre && registrados.getItemCount() > 0);
 		registrados.setEnabled(libre && vincular);
 		rep.setEnabled(libre);
+		notasRelacionadas.setEnabled(libre && pestanas.getSelectedIndex()==1);
 		fechaPago.setEnabled(libre && !vincular);
 		moneda.setEnabled(libre && !vincular);
 		importePago.setEnabled(libre && !vincular);
