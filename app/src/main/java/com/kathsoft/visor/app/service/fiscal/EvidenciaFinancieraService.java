@@ -27,8 +27,18 @@ public final class EvidenciaFinancieraService {
         }
     }
     /** Opción de vinculación a un DR original; el identificador permanece interno al control. */
-    public record ReferenciaRep(long id,LocalDateTime fecha,String uuid,String monedaPago,BigDecimal importePago,String monedaFactura,BigDecimal importeFactura) {
-        @Override public String toString(){return fecha+" · "+uuid+" · "+importeFactura+" "+monedaFactura;}
+    public record ReferenciaRep(long id,LocalDateTime fecha,String uuid,String monedaPago,BigDecimal importePago,
+            String monedaFactura,BigDecimal importeFactura,String estadoRep,String estadoFactura) {
+        /** Los datos SAT son los últimos guardados; no equivalen a consulta en línea. */
+        public boolean candidataAplicable() {
+            return "VIGENTE".equals(estadoRep) && "VIGENTE".equals(estadoFactura)
+                    && importePago != null && importePago.signum()>0
+                    && importeFactura != null && importeFactura.signum()>0;
+        }
+        @Override public String toString(){
+            return fecha+" · REP "+uuid+" · "+(importeFactura==null?"Sin importe":importeFactura.toPlainString())
+                    +" "+monedaFactura+" · "+(candidataAplicable()?"Vigente":"Revisar SAT/importes");
+        }
     }
     /**
      * Aplicación manual ya persistida que puede conciliarse con un REP posterior.
@@ -177,20 +187,56 @@ public final class EvidenciaFinancieraService {
         return jpa.consultar(em->{
             AccesoFiscal.exigir(em,actor,titular,Permisos.FISCAL_CONSULTAR);AccesoFiscal.documento(em,titular,documento,false);
             List<Object[]> filas=em.createNativeQuery("""
-                SELECT pd.id,p.fecha_pago,rep.uuid,p.moneda,pd.moneda,pd.importe_pagado,pd.equivalencia_dr
+                SELECT pd.id,p.fecha_pago,rep.uuid,p.moneda,pd.moneda,pd.importe_pagado,pd.equivalencia_dr,
+                  COALESCE((SELECT es.estado FROM consulta_estado_sat es WHERE es.documento_id=rep.id
+                    ORDER BY es.fecha_consulta DESC,es.id DESC LIMIT 1),'SIN_CONSULTA'),
+                  COALESCE((SELECT es.estado FROM consulta_estado_sat es WHERE es.documento_id=d.id
+                    ORDER BY es.fecha_consulta DESC,es.id DESC LIMIT 1),'SIN_CONSULTA')
                 FROM documento_fiscal d JOIN pago_fiscal_documento pd ON pd.uuid_documento=d.uuid
                 JOIN pago_fiscal p ON p.id=pd.pago_fiscal_id JOIN documento_fiscal rep ON rep.id=p.documento_id
                 JOIN contribuyente_documento cd ON cd.documento_id=rep.id AND cd.contribuyente_id=:t AND cd.archivado_en IS NULL
+                JOIN contribuyente_documento df ON df.documento_id=d.id AND df.contribuyente_id=:t AND df.archivado_en IS NULL
                 WHERE d.id=:d AND NOT EXISTS(SELECT 1 FROM movimiento_pago_complemento m JOIN movimiento_pago mp ON mp.id=m.movimiento_pago_id WHERE m.pago_fiscal_documento_id=pd.id AND mp.contribuyente_id=:t)
                 ORDER BY p.fecha_pago,p.id,pd.id
                 """).setParameter("t",titular).setParameter("d",documento).setMaxResults(200).getResultList();
             return filas.stream().map(r->{
                 BigDecimal valor=(BigDecimal)r[5],eq=r[3].equals(r[4])?BigDecimal.ONE:(BigDecimal)r[6];
                 BigDecimal importe=valor==null||eq==null||eq.signum()<=0?null:valor.divide(eq,6,java.math.RoundingMode.HALF_UP);
-                return new ReferenciaRep(n(r[0]),fecha(r[1]),r[2].toString(),r[3].toString(),importe,r[4].toString(),valor);
+                return new ReferenciaRep(n(r[0]),fecha(r[1]),r[2].toString(),r[3].toString(),importe,r[4].toString(),valor,r[7].toString(),r[8].toString());
             }).toList();
         });
     }
+    /**
+     * Confirma una sugerencia REP de la factura, sin introducir UUID, fecha ni importe.
+     * Si existe una aplicación manual exactamente coincidente, sólo la vincula:
+     * jamás crea un segundo cobro/pago. En otro caso reutiliza registrar() y
+     * todas sus validaciones de saldo, divisa, fecha y control transaccional.
+     *
+     * <p>La detección es automática; la modificación de saldo requiere
+     * confirmación expresa del usuario. No constituye validación fiscal de IVA.</p>
+     *
+     * @return ID del movimiento creado o del movimiento manual conciliado
+     */
+    public long confirmarRep(Long actor,long titular,long documento,long drId){
+        ReferenciaRep r=referencias(actor,titular,documento).stream()
+            .filter(x->x.id()==drId).findFirst()
+            .orElseThrow(()->new IllegalArgumentException("El REP ya no está disponible; actualice Financiero"));
+        if(!r.candidataAplicable())
+            throw new IllegalArgumentException("El REP y la factura deben tener estado SAT VIGENTE registrado e importes conciliables");
+        List<AplicacionRegistrada> manuales=aplicacionesNoVinculadas(actor,titular,documento).stream()
+            .filter(a->a.fecha().equals(r.fecha()) && a.moneda().equals(r.monedaPago())
+                && a.importePago().compareTo(r.importePago())==0
+                && a.importeAplicado().compareTo(r.importeFactura())==0).toList();
+        if(manuales.size()>1)
+            throw new IllegalArgumentException("Varias aplicaciones manuales coinciden con el REP; concilie individualmente");
+        String motivo="Conciliación REP confirmada por el usuario; DR="+drId;
+        if(manuales.size()==1)
+            return vincular(actor,titular,documento,manuales.get(0).id(),drId,motivo);
+        Pago pago=new Pago(r.fecha(),r.monedaPago(),r.importePago(),r.importeFactura(),
+            "REP-DR-"+drId,motivo,drId);
+        return registrarInterno(actor,titular,documento,pago,true);
+    }
+
     /** Resuelve el soporte por UUID dentro del alcance autorizado antes de aplicar el ajuste. */
     public long ajustarPorUuid(Long actor,long titular,long documento,String uuid,LocalDate fecha,String tipo,BigDecimal importe,String motivo) {
         Long id=jpa.consultar(em->{
@@ -205,6 +251,10 @@ public final class EvidenciaFinancieraService {
      * las mismas evidencias no se suman dos veces. Referencias repetidas se rechazan antes de escribir.
      */
     public long registrar(Long actor,long titular,long documento,Pago pago){
+        return registrarInterno(actor,titular,documento,pago,false);
+    }
+
+    private long registrarInterno(Long actor,long titular,long documento,Pago pago,boolean requiereEstadoVigente){
         Objects.requireNonNull(pago);
         return jpa.enTransaccion(em->{
             acceso(em,actor,titular,documento);
@@ -224,6 +274,15 @@ public final class EvidenciaFinancieraService {
             Object[] rep=null;
             if(pago.documentoRepRelacionado()!=null){
                 rep=reps.stream().filter(r->n(r[0])==pago.documentoRepRelacionado()).findFirst().orElseThrow(()->new IllegalArgumentException("DR no disponible para esta factura"));
+                if(requiereEstadoVigente){
+                    if(!"VIGENTE".equals(d.sat())) throw new IllegalArgumentException("Factura sin estado SAT VIGENTE confirmado");
+                    String repSat=(String)em.createNativeQuery("""
+                        SELECT COALESCE((SELECT s.estado FROM consulta_estado_sat s WHERE s.documento_id=p.documento_id
+                            ORDER BY s.fecha_consulta DESC,s.id DESC LIMIT 1),'SIN_CONSULTA')
+                        FROM pago_fiscal_documento pd JOIN pago_fiscal p ON p.id=pd.pago_fiscal_id WHERE pd.id=:dr
+                        """).setParameter("dr",pago.documentoRepRelacionado()).getSingleResult();
+                    if(!"VIGENTE".equals(repSat)) throw new IllegalArgumentException("REP sin estado SAT VIGENTE confirmado");
+                }
                 if(!pago.moneda().equals(rep[2])||!d.moneda().equals(rep[3])||rep[5]==null||pago.importeFactura().compareTo((BigDecimal)rep[5])!=0||!pago.fecha().equals(fecha(rep[1])))throw new IllegalArgumentException("La evidencia no coincide con FechaPago, moneda o ImpPagado del DR");
                 BigDecimal eq=pago.moneda().equals(d.moneda())?BigDecimal.ONE:(BigDecimal)rep[6];
                 if(eq==null||eq.signum()<=0||pago.importePago().compareTo(pago.importeFactura().divide(eq,6,java.math.RoundingMode.HALF_UP))!=0||pago.importePago().compareTo((BigDecimal)rep[4])>0)throw new IllegalArgumentException("Importe en MonedaP no concilia con el DR");
@@ -231,7 +290,7 @@ public final class EvidenciaFinancieraService {
             }else if(!reps.isEmpty())throw new IllegalArgumentException("Existen REP: vincule el DR correspondiente para evitar duplicación");
             BigDecimal disponible=saldoActual(em,obligacion,d.total());
             DistribucionDecimal.validar(disponible,List.of(pago.importeFactura()));
-            MovimientoPagoEntity movimiento=new MovimientoPagoEntity(titular,d.tercero(),d.naturaleza().equals("PAGAR")?"PAGO":"COBRO",pago.fecha(),pago.moneda(),pago.importePago(),pago.referencia(),pago.motivo(),actor);
+            MovimientoPagoEntity movimiento=new MovimientoPagoEntity(titular,d.tercero(),d.naturaleza().equals("PAGAR")?"PAGO":"COBRO",pago.fecha(),pago.moneda(),pago.importePago(),pago.referencia(),pago.motivo(),actor,requiereEstadoVigente?"COMPLEMENTO":"MANUAL");
             em.persist(movimiento);em.flush();
             em.persist(new AplicacionPagoEntity(movimiento.getId(),obligacion,pago.importePago(),pago.importeFactura()));em.flush();
             if(rep!=null)em.createNativeQuery("INSERT INTO movimiento_pago_complemento(movimiento_pago_id,pago_fiscal_documento_id) VALUES (:m,:dr)").setParameter("m",movimiento.getId()).setParameter("dr",pago.documentoRepRelacionado()).executeUpdate();

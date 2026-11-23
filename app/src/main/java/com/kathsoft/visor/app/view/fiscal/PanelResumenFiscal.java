@@ -40,7 +40,7 @@ public class PanelResumenFiscal extends JPanel {
 	private JScrollPane scrollGenerales, scrollIngresos, scrollEgresos, scrollIva, scrollIeps, scrollRetenciones,
 			scrollTerceros, scrollFinanciero, scrollIncidencias, scrollOrigenes, scrollImpuestos, scrollGlobales,
 			scrollImpuestosPago, scrollTotales, scrollConciliacion;
-	private JButton buscar, anterior, siguiente, verDetalle, origenes, evidencia, exportar;
+	private JButton buscar, anterior, siguiente, verDetalle, origenes, evidencia, aplicarRep, exportar;
 	private JLabel lblTitular, lblPeriodo, lblAnio, lblMes, lblDesde, lblHasta, lblRfc, lblMoneda, lblNaturaleza,
 			lblSentido, lblSat, estado, advertencia;
 	private JComboBox<Titular> titular;
@@ -69,15 +69,17 @@ public class PanelResumenFiscal extends JPanel {
 		verDetalle = new JButton("Ver CFDI");
 		origenes = new JButton("Orígenes");
 		evidencia = new JButton("Evidencia / ajuste");
+		aplicarRep = new JButton("Aplicar REP");
+		aplicarRep.setToolTipText("Financiero: identificar un REP disponible y confirmar su aplicación sin escribir el UUID.");
 		exportar = new JButton("CSV completo");
 		GroupLayout a = new GroupLayout(acciones);
 		acciones.setLayout(a);
 		a.setAutoCreateGaps(true);
 		a.setHorizontalGroup(a.createSequentialGroup().addComponent(anterior).addComponent(siguiente)
-				.addComponent(origenes).addComponent(verDetalle).addComponent(evidencia).addComponent(exportar));
+				.addComponent(origenes).addComponent(verDetalle).addComponent(evidencia).addComponent(aplicarRep).addComponent(exportar));
 		a.setVerticalGroup(a.createParallelGroup(GroupLayout.Alignment.BASELINE).addComponent(anterior)
 				.addComponent(siguiente).addComponent(origenes).addComponent(verDetalle).addComponent(evidencia)
-				.addComponent(exportar));
+				.addComponent(aplicarRep).addComponent(exportar));
 		tablaGenerales = new JTable();
 		tablaIngresos = new JTable();
 		tablaEgresos = new JTable();
@@ -244,6 +246,7 @@ public class PanelResumenFiscal extends JPanel {
 		origenes.addActionListener(e -> abrirOrigenes());
 		verDetalle.addActionListener(e -> abrirDetalle());
 		evidencia.addActionListener(e -> abrirEvidencia());
+		aplicarRep.addActionListener(e -> aplicarRepDetectado());
 		exportar.addActionListener(e -> exportar());
 		pestanas.addChangeListener(e -> {
 			if (!cargando && aplicado != null && !ocupado)
@@ -406,6 +409,23 @@ public class PanelResumenFiscal extends JPanel {
 				&& permisos.containsAll(Set.of(Permisos.CFDI_CONSULTAR, Permisos.CFDI_CONSULTAR_DETALLE)));
 		evidencia.setEnabled(libre && documentoSeleccionado(true) > 0 && financiero != null
 				&& permisos.contains(Permisos.FISCAL_REGISTRAR_EVIDENCIA));
+		aplicarRep.setEnabled(libre && seccion()==Seccion.FINANCIERO && documentoSeleccionado(true)>0
+				&& financiero!=null && permisos.contains(Permisos.FISCAL_REGISTRAR_EVIDENCIA)
+				&& valorSeleccionado("REP elegibles por SAT")>0);
+	}
+
+	/** Lee un contador de la fila actualmente seleccionada sin depender de su orden visual. */
+	private long valorSeleccionado(String columna) {
+		if (pestanas==null || pestanas.getSelectedIndex()<0) return 0;
+		JTable t=tabla();int fila=t.getSelectedRow();
+		if(fila<0) return 0;
+		int modelo=t.convertRowIndexToModel(fila);
+		for(int i=0;i<t.getModel().getColumnCount();i++)
+			if(columna.equals(t.getModel().getColumnName(i))){
+				Object valor=t.getModel().getValueAt(modelo,i);
+				return valor instanceof Number n?n.longValue():0;
+			}
+		return 0;
 	}
 
 	private long documentoSeleccionado(boolean factura) {
@@ -442,6 +462,41 @@ public class PanelResumenFiscal extends JPanel {
 		d.setLocationRelativeTo(this);
 		d.setVisible(true);
 		consultar(aplicado, pagina);
+	}
+
+	/**
+	 * Detección automática y aplicación voluntaria: el usuario sólo elige un
+	 * documento relacionado. No necesita capturar UUID, moneda ni importe.
+	 * El servicio vuelve a validar el REP dentro de la transacción de escritura.
+	 */
+	private void aplicarRepDetectado(){
+		if(!aplicarRep.isEnabled())return;
+		long documento=documentoSeleccionado(true);
+		long titularId=aplicado.titular();
+		Long actor=sesion.id();
+		EvidenciaFinancieraService backend=financiero;
+		ejecutar(()->backend.referencias(actor,titularId,documento),referencias->{
+			var disponibles=referencias.stream().filter(EvidenciaFinancieraService.ReferenciaRep::candidataAplicable).toList();
+			if(disponibles.isEmpty()){
+				estado.setText("Los REP detectados no están disponibles para aplicación. Revise SAT, moneda, importes o vuelva a buscar.");
+				return;
+			}
+			EvidenciaFinancieraService.ReferenciaRep elegido=(EvidenciaFinancieraService.ReferenciaRep)
+				JOptionPane.showInputDialog(this,"Seleccione el pago a aplicar a la factura. Se evitará duplicar un pago manual coincidente.",
+					"Confirmar REP relacionado",JOptionPane.QUESTION_MESSAGE,null,disponibles.toArray(),disponibles.get(0));
+			if(elegido==null)return;
+			int confirmar=JOptionPane.showConfirmDialog(this,
+				"Factura documento: "+documento+"\nREP: "+elegido.uuid()
+				+"\nFecha: "+elegido.fecha()+"\nImporte: "+elegido.importeFactura()
+				+" "+elegido.monedaFactura()+"\n\n¿Confirmar aplicación financiera?",
+				"Aplicar complemento de pago",JOptionPane.YES_NO_OPTION,JOptionPane.WARNING_MESSAGE);
+			if(confirmar!=JOptionPane.YES_OPTION)return;
+			ejecutar(()->backend.confirmarRep(actor,titularId,documento,elegido.id()),
+				id->{
+					estado.setText("REP conciliado; movimiento "+id+". Actualizando Financiero...");
+					consultar(aplicado,pagina);
+				});
+		});
 	}
 
 	private Frame owner() {

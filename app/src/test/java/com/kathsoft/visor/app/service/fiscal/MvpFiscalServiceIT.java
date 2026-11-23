@@ -617,6 +617,52 @@ class MvpFiscalServiceIT {
                         "100", "16", "1", null, "VIGENTE", "2.0");
                 return null;
             });
+            // Nuevo flujo asistido: el REP se detecta ANTES de crear una obligación.
+            var antesRep = resumen.consultar(actor, julio, Seccion.FINANCIERO, 0);
+            var filaSinAplicar = documento(antesRep, "Documento", 1204);
+            assertNull(filaSinAplicar.get(columna(antesRep, "Saldo al corte documentado")));
+            assertEquals(1L, ((Number)filaSinAplicar.get(columna(antesRep, "REP sin aplicar"))).longValue());
+            assertEquals(1L, ((Number)filaSinAplicar.get(columna(antesRep, "REP elegibles por SAT"))).longValue());
+            igual("116", filaSinAplicar.get(columna(antesRep, "Importe REP sugerido (moneda factura)")));
+            assertEquals(1, financiera.referencias(actor,a,1204).stream().filter(
+                EvidenciaFinancieraService.ReferenciaRep::candidataAplicable).count());
+            long confirmadoA=financiera.confirmarRep(actor,a,1204,22011);
+            long confirmadoB=financiera.confirmarRep(actor,b,1204,22011);
+            assertNotEquals(confirmadoA,confirmadoB);
+            assertThrows(IllegalArgumentException.class,()->financiera.confirmarRep(actor,a,1204,22011));
+            assertThrows(IllegalArgumentException.class,()->financiera.confirmarRep(actor,a,REP_CANCELADO,20101));
+            jpa.consultar(em->{
+                assertEquals(2L,((Number)em.createNativeQuery("SELECT COUNT(*) FROM movimiento_pago WHERE id IN (:a,:b) AND origen='COMPLEMENTO'")
+                    .setParameter("a",confirmadoA).setParameter("b",confirmadoB).getSingleResult()).longValue());
+                assertEquals(2L,((Number)em.createNativeQuery("SELECT COUNT(*) FROM movimiento_pago_complemento WHERE pago_fiscal_documento_id=22011").getSingleResult()).longValue());
+                return null;
+            });
+            var despuesRep=resumen.consultar(actor,julio,Seccion.FINANCIERO,0);
+            var filaAplicada=documento(despuesRep,"Documento",1204);
+            igual("116",filaAplicada.get(columna(despuesRep,"Pagos/cobros del periodo")));
+            igual("0",filaAplicada.get(columna(despuesRep,"Saldo al corte documentado")));
+            assertEquals(0L,((Number)filaAplicada.get(columna(despuesRep,"REP sin aplicar"))).longValue());
+
+            // REP posterior a pago manual idéntico: reutilizar movimiento sin duplicar saldo.
+            jpa.enTransaccion(em->{
+                comprobante(em,a,b,1207,"I",7,3,"MXN","100","116","PPD","VIGENTE",true);
+                iva(em,1207,"100","16");
+                return null;
+            });
+            long manualSinRep=financiera.registrar(actor,a,1207,pago(7,4,"58","Banco-antes-del-REP-1207",null));
+            jpa.enTransaccion(em->{
+                rep(em,a,b,2207,1207,7,4,"MXN","MXN","58","58","116","58",1,"50","8","1",null,"VIGENTE","2.0");
+                return null;
+            });
+            assertEquals(manualSinRep,financiera.confirmarRep(actor,a,1207,22071));
+            jpa.consultar(em->{
+                assertEquals(1L,((Number)em.createNativeQuery("SELECT COUNT(*) FROM aplicacion_pago WHERE movimiento_pago_id=:m")
+                    .setParameter("m",manualSinRep).getSingleResult()).longValue());
+                assertEquals(1L,((Number)em.createNativeQuery("SELECT COUNT(*) FROM movimiento_pago_complemento WHERE movimiento_pago_id=:m")
+                    .setParameter("m",manualSinRep).getSingleResult()).longValue());
+                return null;
+            });
+
             var julioEjercicioAnterior = resumen.consultar(actor, julio, Seccion.IVA, 0);
             igual("16", documento(julioEjercicioAnterior, "Factura documento", 1204)
                     .get(columna(julioEjercicioAnterior, "IVA realizadoDR")));
