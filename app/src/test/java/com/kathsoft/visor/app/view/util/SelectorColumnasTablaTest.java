@@ -3,7 +3,10 @@ package com.kathsoft.visor.app.view.util;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
-import javax.swing.JCheckBoxMenuItem;
+import javax.swing.JCheckBox;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JButton;
 import javax.swing.JPopupMenu;
 import javax.swing.JTable;
 import javax.swing.SwingUtilities;
@@ -20,7 +23,7 @@ class SelectorColumnasTablaTest {
             selector.actualizar(tabla,"FINANCIERO");
             assertEquals(List.of("Documento","UUID","Total"),selector.visibles(tabla));
             JPopupMenu menu=selector.menu(tabla,"FINANCIERO");
-            ((JCheckBoxMenuItem)menu.getComponent(0)).doClick();
+            check(menu,0).doClick();
             assertEquals(List.of("UUID","Total"),selector.visibles(tabla));
             assertEquals(42L,tabla.getModel().getValueAt(0,0));
             assertEquals(3,tabla.getModel().getColumnCount());
@@ -42,13 +45,13 @@ class SelectorColumnasTablaTest {
             assertEquals(3,selector.visibles(otraSeccion).size());
 
             JPopupMenu ultimo=selector.menu(tabla,"FINANCIERO");
-            ((JCheckBoxMenuItem)ultimo.getComponent(1)).doClick();
+            check(ultimo,1).doClick();
             assertEquals(List.of("Total"),selector.visibles(tabla));
-            ((JCheckBoxMenuItem)selector.menu(tabla,"FINANCIERO").getComponent(2)).doClick();
+            check(selector.menu(tabla,"FINANCIERO"),2).doClick();
             assertEquals(List.of("Total"),selector.visibles(tabla)); // no permite ocultar todas
 
             JPopupMenu restaurar=selector.menu(tabla,"FINANCIERO");
-            ((javax.swing.JMenuItem)restaurar.getComponent(restaurar.getComponentCount()-1)).doClick();
+            ((JButton)restaurar.getComponent(restaurar.getComponentCount()-1)).doClick();
             assertEquals(List.of("Documento","UUID","Total"),selector.visibles(tabla));
 
             var recargado=new SelectorColumnasTabla(namespace);
@@ -56,6 +59,12 @@ class SelectorColumnasTablaTest {
             recargado.actualizar(tabla,"FINANCIERO");
             assertEquals(3,recargado.visibles(tabla).size());
         });
+    }
+
+    private static JCheckBox check(JPopupMenu popup,int indice){
+        JScrollPane scroll=(JScrollPane)popup.getComponent(0);
+        JPanel opciones=(JPanel)scroll.getViewport().getView();
+        return (JCheckBox)opciones.getComponent(indice);
     }
 
     @Test void sinColumnasMuestraOpcionDeshabilitada()throws Exception{
