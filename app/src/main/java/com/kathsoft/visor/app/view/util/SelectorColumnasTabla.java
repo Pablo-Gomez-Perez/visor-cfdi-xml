@@ -31,7 +31,6 @@ import javax.swing.table.TableModel;
  * Un nuevo setModel() requiere llamar nuevamente a actualizar().</p>
  */
 public final class SelectorColumnasTabla {
-    private static final String SEPARADOR = String.valueOf((char)31);
     private final Preferences preferencias;
     private final String prefijo;
     private final Map<JTable, Estado> estados = new WeakHashMap<>();
@@ -122,7 +121,7 @@ public final class SelectorColumnasTabla {
                     return;
                 }
                 estado.ocultas=nuevas;
-                preferencias.put(estado.clave,String.join(SEPARADOR,nuevas));
+                preferencias.put(estado.clave,serializar(nuevas));
                 aplicar(tabla,estado);
             });
             opciones.add(item);
@@ -168,9 +167,27 @@ public final class SelectorColumnasTabla {
         }
     }
 
+    private static String serializar(Set<String> ocultas){
+        return ocultas.stream().map(x->java.util.Base64.getUrlEncoder().withoutPadding()
+            .encodeToString(x.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+            .collect(java.util.stream.Collectors.joining(","));
+    }
+
     private Set<String> leer(String clave){
-        String s=preferencias.get(clave,"");
-        return s.isEmpty()?new LinkedHashSet<>():new LinkedHashSet<>(List.of(s.split(SEPARADOR,-1)));
+        String valor=preferencias.get(clave,"");
+        Set<String> ocultas=new LinkedHashSet<>();
+        if(valor.isEmpty())return ocultas;
+        for(String token:valor.split(",")){
+            try{
+                ocultas.add(new String(java.util.Base64.getUrlDecoder().decode(token),
+                    java.nio.charset.StandardCharsets.UTF_8));
+            }catch(IllegalArgumentException ex){
+                // Una preferencia local corrupta no debe impedir consultar CFDI.
+                preferencias.remove(clave);
+                return new LinkedHashSet<>();
+            }
+        }
+        return ocultas;
     }
 
     private String clave(String seccion){
