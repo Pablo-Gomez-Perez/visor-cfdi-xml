@@ -290,12 +290,8 @@ public final class EvidenciaFinancieraService {
             }else if(!reps.isEmpty())throw new IllegalArgumentException("Existen REP: vincule el DR correspondiente para evitar duplicación");
             BigDecimal disponible=saldoActual(em,obligacion,d.total());
             DistribucionDecimal.validar(disponible,List.of(pago.importeFactura()));
-            MovimientoPagoEntity movimiento=new MovimientoPagoEntity(titular,d.tercero(),d.naturaleza().equals("PAGAR")?"PAGO":"COBRO",pago.fecha(),pago.moneda(),pago.importePago(),pago.referencia(),pago.motivo(),actor);
+            MovimientoPagoEntity movimiento=new MovimientoPagoEntity(titular,d.tercero(),d.naturaleza().equals("PAGAR")?"PAGO":"COBRO",pago.fecha(),pago.moneda(),pago.importePago(),pago.referencia(),pago.motivo(),actor,requiereEstadoVigente?"COMPLEMENTO":"MANUAL");
             em.persist(movimiento);em.flush();
-            if(requiereEstadoVigente){
-                em.createNativeQuery("UPDATE movimiento_pago SET origen='COMPLEMENTO' WHERE id=:id AND contribuyente_id=:t")
-                    .setParameter("id",movimiento.getId()).setParameter("t",titular).executeUpdate();
-            }
             em.persist(new AplicacionPagoEntity(movimiento.getId(),obligacion,pago.importePago(),pago.importeFactura()));em.flush();
             if(rep!=null)em.createNativeQuery("INSERT INTO movimiento_pago_complemento(movimiento_pago_id,pago_fiscal_documento_id) VALUES (:m,:dr)").setParameter("m",movimiento.getId()).setParameter("dr",pago.documentoRepRelacionado()).executeUpdate();
             auditar(em,actor,titular,documento,"REGISTRAR_PAGO",pago.motivo()+"; movimiento="+movimiento.getId());

@@ -79,13 +79,22 @@ public class MovimientoPagoEntity {
     public MovimientoPagoEntity(long titular, Long tercero, String naturaleza,
             LocalDateTime fecha, String moneda, BigDecimal importe,
             String referencia, String observaciones, long usuario) {
+        this(titular,tercero,naturaleza,fecha,moneda,importe,referencia,observaciones,usuario,"MANUAL");
+    }
+
+    /** Identifica una confirmación REP como COMPLEMENTO sin crear evidencia manual ficticia. */
+    public MovimientoPagoEntity(long titular, Long tercero, String naturaleza,
+            LocalDateTime fecha, String moneda, BigDecimal importe,
+            String referencia, String observaciones, long usuario,String origen) {
+        if(!java.util.Set.of("MANUAL","COMPLEMENTO").contains(origen))
+            throw new IllegalArgumentException("Origen financiero inválido");
         this.contribuyenteId = titular;
         this.terceroId = tercero;
         this.naturaleza = naturaleza;
         this.fechaMovimiento = fecha;
         this.moneda = moneda;
         this.importe = importe;
-        this.origen = "MANUAL";
+        this.origen = origen;
         this.referencia = referencia;
         this.observaciones = observaciones;
         this.usuarioId = usuario;
