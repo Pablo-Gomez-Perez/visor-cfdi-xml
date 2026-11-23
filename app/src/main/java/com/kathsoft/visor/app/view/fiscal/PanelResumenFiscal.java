@@ -9,6 +9,7 @@ import com.kathsoft.visor.app.service.fiscal.ResumenFiscalService.Seccion;
 import com.kathsoft.visor.app.service.operacion.ClasificacionOperacionesService.Titular;
 import com.kathsoft.visor.app.service.visor.DetalleCfdiService;
 import com.kathsoft.visor.app.view.visor.Fr_DatosCfdi;
+import com.kathsoft.visor.app.view.util.SelectorColumnasTabla;
 import java.awt.Frame;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -40,7 +41,7 @@ public class PanelResumenFiscal extends JPanel {
 	private JScrollPane scrollGenerales, scrollIngresos, scrollEgresos, scrollIva, scrollIeps, scrollRetenciones,
 			scrollTerceros, scrollFinanciero, scrollIncidencias, scrollOrigenes, scrollImpuestos, scrollGlobales,
 			scrollImpuestosPago, scrollTotales, scrollConciliacion;
-	private JButton buscar, anterior, siguiente, verDetalle, origenes, evidencia, aplicarRep, exportar;
+	private JButton buscar, anterior, siguiente, verDetalle, origenes, evidencia, aplicarRep, exportar, columnas;
 	private JLabel lblTitular, lblPeriodo, lblAnio, lblMes, lblDesde, lblHasta, lblRfc, lblMoneda, lblNaturaleza,
 			lblSentido, lblSat, estado, advertencia;
 	private JComboBox<Titular> titular;
@@ -50,6 +51,7 @@ public class PanelResumenFiscal extends JPanel {
 	private JTextField rfc, moneda;
 	private ResumenFiscalService servicio;
 	private EvidenciaFinancieraService financiero;
+	private SelectorColumnasTabla selectorColumnas;
 	private DetalleCfdiService detalle;
 	private UsuarioSesion sesion;
 	private Set<String> permisos = Set.of();
@@ -72,14 +74,17 @@ public class PanelResumenFiscal extends JPanel {
 		aplicarRep = new JButton("Aplicar REP");
 		aplicarRep.setToolTipText("Financiero: identificar un REP disponible y confirmar su aplicación sin escribir el UUID.");
 		exportar = new JButton("CSV completo");
+		columnas = new JButton("Columnas ▾");
+		columnas.setToolTipText("Mostrar u ocultar columnas de esta pestaña. No cambia datos ni exportaciones CSV.");
 		GroupLayout a = new GroupLayout(acciones);
 		acciones.setLayout(a);
 		a.setAutoCreateGaps(true);
-		a.setHorizontalGroup(a.createSequentialGroup().addComponent(anterior).addComponent(siguiente)
-				.addComponent(origenes).addComponent(verDetalle).addComponent(evidencia).addComponent(aplicarRep).addComponent(exportar));
-		a.setVerticalGroup(a.createParallelGroup(GroupLayout.Alignment.BASELINE).addComponent(anterior)
-				.addComponent(siguiente).addComponent(origenes).addComponent(verDetalle).addComponent(evidencia)
-				.addComponent(aplicarRep).addComponent(exportar));
+		a.setHorizontalGroup(a.createParallelGroup()
+				.addGroup(a.createSequentialGroup().addComponent(anterior).addComponent(siguiente).addComponent(origenes).addComponent(verDetalle))
+				.addGroup(a.createSequentialGroup().addComponent(evidencia).addComponent(aplicarRep).addComponent(columnas).addComponent(exportar)));
+		a.setVerticalGroup(a.createSequentialGroup()
+				.addGroup(a.createParallelGroup(GroupLayout.Alignment.BASELINE).addComponent(anterior).addComponent(siguiente).addComponent(origenes).addComponent(verDetalle))
+				.addGroup(a.createParallelGroup(GroupLayout.Alignment.BASELINE).addComponent(evidencia).addComponent(aplicarRep).addComponent(columnas).addComponent(exportar)));
 		tablaGenerales = new JTable();
 		tablaIngresos = new JTable();
 		tablaEgresos = new JTable();
@@ -248,6 +253,7 @@ public class PanelResumenFiscal extends JPanel {
 		evidencia.addActionListener(e -> abrirEvidencia());
 		aplicarRep.addActionListener(e -> aplicarRepDetectado());
 		exportar.addActionListener(e -> exportar());
+		columnas.addActionListener(e -> mostrarColumnas());
 		pestanas.addChangeListener(e -> {
 			if (!cargando && aplicado != null && !ocupado)
 				consultar(aplicado, 0);
@@ -293,6 +299,7 @@ public class PanelResumenFiscal extends JPanel {
 		this.financiero = financiero;
 		this.detalle = detalle;
 		this.sesion = sesion;
+		this.selectorColumnas = sesion == null ? null : new SelectorColumnasTabla("fiscal-" + sesion.id());
 		this.permisos = Set.copyOf(permisos);
 		aplicado = null;
 		limpiar();
@@ -383,6 +390,7 @@ public class PanelResumenFiscal extends JPanel {
 			destino.setModel(modelo);
 			for (int c = 0; c < destino.getColumnCount(); c++)
 				destino.getColumnModel().getColumn(c).setPreferredWidth(135);
+			if(selectorColumnas!=null) selectorColumnas.actualizar(destino,seleccion.name());
 			advertencia.setText(r.aviso());
 			advertencia.setToolTipText(r.aviso());
 			estado.setText("Página " + (p + 1) + " · " + r.filas().size() + " filas · " + f.desde() + " / " + f.hasta()
@@ -405,6 +413,7 @@ public class PanelResumenFiscal extends JPanel {
 		siguiente.setEnabled(libre && datos != null && datos.siguiente());
 		origenes.setEnabled(libre && aplicado != null);
 		exportar.setEnabled(libre && aplicado != null && datos != null);
+		columnas.setEnabled(libre && selectorColumnas != null && aplicado != null && tabla().getModel().getColumnCount()>0);
 		verDetalle.setEnabled(libre && documentoSeleccionado(false) > 0 && detalle != null
 				&& permisos.containsAll(Set.of(Permisos.CFDI_CONSULTAR, Permisos.CFDI_CONSULTAR_DETALLE)));
 		evidencia.setEnabled(libre && documentoSeleccionado(true) > 0 && financiero != null
@@ -550,6 +559,12 @@ public class PanelResumenFiscal extends JPanel {
 						.ordinal());
 		cargando = false;
 		consultar(f, 0);
+	}
+
+	/** Selector transversal para cualquiera de las pestañas con el mismo motor Swing. */
+	private void mostrarColumnas(){
+		if(!columnas.isEnabled() || selectorColumnas==null)return;
+		selectorColumnas.menu(tabla(),seccion().name()).show(columnas,0,columnas.getHeight());
 	}
 
 	private void exportar() {

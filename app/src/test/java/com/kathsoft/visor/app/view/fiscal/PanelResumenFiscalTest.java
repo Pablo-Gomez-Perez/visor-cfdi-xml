@@ -59,7 +59,7 @@ class PanelResumenFiscalTest {
                 for (int r = 0; r < tabla.getRowCount(); r++)
                     for (int c = 0; c < tabla.getColumnCount(); c++) assertFalse(tabla.isCellEditable(r, c));
             }
-            for (String nombre : List.of("buscar", "anterior", "siguiente", "verDetalle", "origenes", "evidencia", "aplicarRep", "exportar"))
+            for (String nombre : List.of("buscar", "anterior", "siguiente", "verDetalle", "origenes", "evidencia", "aplicarRep", "columnas", "exportar"))
                 assertFalse(campo(panel, nombre, JButton.class).isEnabled(), nombre);
             assertFalse(campo(panel, "aplicarRep", JButton.class).isEnabled());
             assertFalse(campo(panel, "titular", JComboBox.class).isEnabled());
