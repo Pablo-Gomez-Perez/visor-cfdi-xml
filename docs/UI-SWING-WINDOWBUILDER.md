@@ -168,3 +168,26 @@ Administrar XML abre `PanelVisorCfdi` en CardLayout; un único `Fr_DatosCfdi` mo
 
 ## RF-020 — Clasificación de operaciones
 Contabilidad → Clasificación de operaciones abre PanelClasificacionOperaciones en CardLayout. GroupLayout, campos explícitos, barra de acciones, tabla con scroll y filtros inferiores; Fr_DatosCategoriaOperacion y Fr_HistorialClasificacionOperacion son diálogos de detalle con constructor vacío. Las cargas y escrituras se ejecutan con SwingWorker. Ver [RF-020](RF-020.md).
+
+## RF-021 a RF-024 — Clasificación detallada y resumen fiscal
+
+`PanelClasificacionOperaciones` conserva su `JSplitPane`, herramientas,
+edición por celda, selección múltiple y atajos. La acción **Conceptos /
+impuestos** abre `Fr_DatosClasificacionDetalle`, un `JDialog` de registro con
+tablas, `JComboBox` reutilizables y `GroupLayout` explícito.
+
+`PanelResumenFiscal` es una tarjeta adicional del `CardLayout`, accesible
+desde **Contabilidad → Resumen fiscal**. Contiene `JTabbedPane` con tablas
+explícitas, filtros inferiores, botón Buscar, paginación, detalle, evidencia y
+exportación CSV. Las pestañas de IEPS y Tributos por categoría separan
+orígenes, tratamientos y pendientes. `Fr_DatosEvidencia` permite registrar o vincular un pago
+manual anterior con un REP posterior y registrar ajustes soportados. Cada
+vista tiene constructor público vacío e inyección de servicios posterior.
+`SwingWorker` protege el EDT; los tokens de generación descartan resultados
+de filtros anteriores. Los botones reflejan permisos, que el servicio valida
+nuevamente dentro de la transacción.
+
+Las pruebas de constructor vacío y comportamiento en modo headless pasan en
+Maven. La apertura efectiva en **WindowBuilder Design** y la inspección de
+900×700 y 740×490 están pendientes de ejecución manual; no se presentan
+como comprobadas por las pruebas headless.
