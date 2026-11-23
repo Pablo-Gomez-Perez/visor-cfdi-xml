@@ -191,3 +191,41 @@ Las pruebas de constructor vacío y comportamiento en modo headless pasan en
 Maven. La apertura efectiva en **WindowBuilder Design** y la inspección de
 900×700 y 740×490 están pendientes de ejecución manual; no se presentan
 como comprobadas por las pruebas headless.
+
+
+## Selector transversal de columnas — PanelResumenFiscal
+
+`SelectorColumnasTabla` (paquete `view.util`) permite mostrar/ocultar
+columnas de **cada tabla** del `JTabbedPane` de `PanelResumenFiscal`,
+sin crear ventanas o paneles adicionales. Botón **Columnas ▾** en la
+barra de herramientas; el menú emergente contiene casillas desplazables
+(para pantallas pequeñas) y **Mostrar todas**. Las casillas permanecen
+abiertas al seleccionar varias opciones.
+
+- Se preservan todas las columnas en `TableModel`. Sólo cambia el
+  `TableColumnModel`, por tanto no se pierde selección por documento,
+  UUID, orden de datos, filtros ni exportación CSV completo.
+- No se permite ocultar todas las columnas de una pestaña.
+- Se guarda la elección localmente con `java.util.prefs.Preferences`,
+  por identificador de usuario y sección (enumeración `Seccion`). Los
+  cambios de un usuario no modifican la visualización de otro y cada
+  pestaña tiene su configuración independiente.
+- Después de cada consulta y `setModel` se invoca
+  `selectorColumnas.actualizar(tabla, seccion.name())` para restaurar
+  anchuras y opciones. No se realizan consultas de BD en renderizadores
+  o componentes del menú.
+- La clase es reutilizable en otras `JTable`; no depende del motor
+  fiscal ni del nombre de columnas. Al cambiar el esquema de un modelo,
+  los encabezados no coincidentes deben ignorarse y las columnas nuevas
+  aparecen visibles por defecto.
+- `SelectorColumnasTabla` se inicializa **después** de inyectar una
+  sesión en `configurar`, no desde el constructor visual de
+  `PanelResumenFiscal`. El constructor permanece compatible con
+  Eclipse WindowBuilder.
+- Se reacomoda la barra de herramientas en dos filas para no desbordar
+  el ancho objetivo de 740 píxeles.
+
+Validación: JUnit headless cubre preferencias, ocultación/restauración,
+acceso por identidad de modelo, nuevas consultas y aislamiento entre
+usuarios/pestañas. La validación visual real en WindowBuilder permanece
+pendiente hasta ejecutarla en Eclipse.
