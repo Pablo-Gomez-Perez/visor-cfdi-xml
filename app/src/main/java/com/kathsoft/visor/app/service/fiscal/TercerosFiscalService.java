@@ -73,14 +73,39 @@ public final class TercerosFiscalService {
         return jpa.enTransaccion(em->{
             AccesoFiscal.exigir(em,actor,f.titular(),Permisos.FISCAL_CONSULTAR);
             String sql=FiscalSql.BASE+SALDOS+"""
+                ,rep_sugerencias AS (
+                  SELECT fac.documento_id,
+                    COUNT(*) rep_detectados,
+                    SUM(CASE WHEN rep.estado_sat='VIGENTE' AND fac.estado_sat='VIGENTE'
+                        AND pd.moneda=fac.moneda AND pd.importe_pagado>0
+                        AND (pd.moneda=p.moneda OR pd.equivalencia_dr>0)
+                      THEN 1 ELSE 0 END) rep_con_estado_vigente,
+                    SUM(CASE WHEN rep.estado_sat='VIGENTE' AND fac.estado_sat='VIGENTE'
+                        AND pd.moneda=fac.moneda AND pd.importe_pagado>0
+                        AND (pd.moneda=p.moneda OR pd.equivalencia_dr>0)
+                      THEN pd.importe_pagado ELSE 0 END) importe_rep_sugerido
+                  FROM activos fac JOIN pago_fiscal_documento pd ON pd.uuid_documento=fac.uuid
+                  JOIN pago_fiscal p ON p.id=pd.pago_fiscal_id
+                  JOIN activos rep ON rep.documento_id=p.documento_id AND rep.tipo='P'
+                  WHERE fac.tipo='I' AND NOT EXISTS (
+                    SELECT 1 FROM movimiento_pago_complemento mc
+                    JOIN movimiento_pago m ON m.id=mc.movimiento_pago_id
+                    WHERE mc.pago_fiscal_documento_id=pd.id AND m.contribuyente_id=:t
+                  )
+                  GROUP BY fac.documento_id
+                )
                 SELECT u.documento_id,u.uuid,u.tercero_id,u.rfc_tercero,u.nombre_tercero,u.sentido,u.tipo,u.moneda,u.estado_sat,
                     o.obligacion_id,o.naturaleza,u.total,o.monto_original,o.saldo_inicial,o.pago_periodo,o.ajuste_periodo,o.ajustado,o.saldo_cierre,
                     CASE WHEN o.obligacion_id IS NULL THEN 'SALDO_PENDIENTE_CORROBORAR' ELSE 'SALDO_DOCUMENTADO_HISTORIA_PARCIAL' END estado,
-                    u.naturaleza,u.categoria,o.moneda moneda_obligacion,o.pagos_sin_confirmar
+                    u.naturaleza,u.categoria,o.moneda moneda_obligacion,o.pagos_sin_confirmar,
+                    COALESCE(rs.rep_detectados,0) rep_detectados,
+                    COALESCE(rs.rep_con_estado_vigente,0) rep_aplicables,
+                    CASE WHEN rs.rep_con_estado_vigente>0 THEN rs.importe_rep_sugerido END rep_pendiente_obligacion
                 FROM activos u LEFT JOIN obligaciones o ON o.documento_id=u.documento_id
+                LEFT JOIN rep_sugerencias rs ON rs.documento_id=u.documento_id
                 WHERE u.fecha_emision<:hasta AND u.tipo='I'
                 """+FiscalSql.filtros(f,"u")+" ORDER BY u.rfc_tercero,u.fecha_emision,u.documento_id,o.obligacion_id";
-            return ImpuestosService.tabla(em,sql,f,pagina,List.of("Documento","UUID","Tercero ID","RFC","Tercero","Sentido","Tipo","Moneda CFDI","SAT","Obligación ID","Naturaleza financiera","Total documental","Obligación original","Saldo inicial documentado","Pagos/cobros del periodo","Ajustes del periodo","Importe ajustado","Saldo al corte documentado","Estado del saldo","Naturaleza general","Categoría general","Moneda obligación","Pagos REP excluidos por estado / archivado"),"Saldo al corte según obligaciones registradas. Ausencia de obligación o historia no significa saldo inicial cero. REP sin aplicación permanecen por conciliar. Ajustes no prueban restitución fiscal.");
+            return ImpuestosService.tabla(em,sql,f,pagina,List.of("Documento","UUID","Tercero ID","RFC","Tercero","Sentido","Tipo","Moneda CFDI","SAT","Obligación ID","Naturaleza financiera","Total documental","Obligación original","Saldo inicial documentado","Pagos/cobros del periodo","Ajustes del periodo","Importe ajustado","Saldo al corte documentado","Estado del saldo","Naturaleza general","Categoría general","Moneda obligación","Pagos REP excluidos por estado / archivado","REP sin aplicar","REP elegibles por SAT","Importe REP sugerido (moneda factura)"),"Los REP se detectan mediante UUID y se muestran aunque no exista obligación; NO reducen saldos sin confirmación. Elegibles: último SAT guardado VIGENTE en factura y REP, moneda y equivalencia coherentes. Pulse Aplicar REP para conciliar sin capturar UUID. Estados desconocidos y ajustes requieren revisión.");
         });
     }
 }
