@@ -28,7 +28,7 @@ XML, saldos, evidencia ni clasificadores.
 | P0 | **626** | Moral | RESICO PM | LISR Título VII, Cap. XII, arts. 206–215 | Motor distinto del 626 PF, reconocimiento y deducciones propios; IVA independiente |
 | P1 | **606** | Física | Arrendamiento | LISR arts. 114–118, especialmente 116; LIVA según inmueble y operación | ISR provisional por arrendamiento, alternativa de deducción comprobada u opción legal si procede, IVA cuando corresponda |
 | P2 | **625** | Física | Plataformas tecnológicas | LISR arts. 113-A a 113-D, LIVA correspondiente y reglas | Debe registrar opción de retención definitiva o provisional y evidencias de plataforma; no sumar cobros de la plataforma dos veces |
-| P2 | **622** | Física o Moral | Sector primario AGAPES | LISR arts. 74 y correlativos, disposiciones y transitorios aplicables | Motor especial separado por tipo de persona, exenciones y condiciones verificadas |
+| P2 | **622** | Moral | Actividades agrícolas, ganaderas, silvícolas y pesqueras (AGAPES) | LISR art. 74 y correlativos; disposiciones y transitorios aplicables | Motor especial para personas morales bajo 622; personas físicas del sector deberán analizarse conforme a su régimen efectivamente inscrito y su situación legal |
 | P3 | **621** | Física | RIF histórico/transitorio | disposiciones y transitorios de permanencia | **Sólo periodos elegibles**; no permitir altas nuevas por omisión de reglas transitorias |
 | P3 | **603** | Moral | Sin fines de lucro | LISR Título III | Auxiliares/retenciones primero; no presumir pago ISR general, ingresos específicos pueden tener obligaciones |
 | P3 | **620, 623, 624** | Moral u otros | Cooperativas, sociedades coordinadas, grupos | LISR capítulos especiales | Postergar cálculos específicos |
@@ -101,7 +101,7 @@ movimientos no conciliados. La modificación de tratamiento requiere auditoría.
 3. **ISR PF 612 y 626:** algoritmos distintos, tests mensuales y anuales.
 4. **ISR PM 601 y 626:** coeficiente/datos previos y reglas de cada capítulo,
    tests con acumulados y retenciones.
-5. **ARRENDAMIENTO 606** y posteriormente 625/622 según demanda real.
+5. **ARRENDAMIENTO 606** y posteriormente 625/622 según demanda real; 622 está catalogado para PM.
 6. **INTEGRACIÓN:** comparaciones con papeles de trabajo validados
    por contador, sin reproducir automáticamente un formulario SAT
    cuya estructura pueda cambiar.
