@@ -67,6 +67,9 @@ public final class SelectorColumnasTabla {
         String clave = clave(seccion);
         TableModel modelo = tabla.getModel();
         Set<String> ocultas = leer(clave);
+        Set<String> actuales = new LinkedHashSet<>();
+        for(int i=0;i<modelo.getColumnCount();i++) actuales.add(modelo.getColumnName(i));
+        ocultas.retainAll(actuales); // Ignora encabezados retirados/renombrados.
         Estado estado = new Estado(modelo, clave, ocultas);
         TableColumnModel cm=tabla.getColumnModel();
         for(int i=0;i<cm.getColumnCount();i++){
