@@ -28,7 +28,7 @@ import javax.swing.table.TableModel;
  * Un nuevo setModel() requiere llamar nuevamente a actualizar().</p>
  */
 public final class SelectorColumnasTabla {
-    private static final String SEPARADOR = "\u001f";
+    private static final String SEPARADOR = String.valueOf((char)31);
     private final Preferences preferencias;
     private final String prefijo;
     private final Map<JTable, Estado> estados = new WeakHashMap<>();
@@ -89,11 +89,12 @@ public final class SelectorColumnasTabla {
      */
     public JPopupMenu menu(JTable tabla,String seccion){
         Objects.requireNonNull(tabla);
-        Estado estado=estados.get(tabla);
-        if(estado==null || estado.modelo!=tabla.getModel() || !estado.clave.equals(clave(seccion))){
+        Estado previo=estados.get(tabla);
+        if(previo==null || previo.modelo!=tabla.getModel() || !previo.clave.equals(clave(seccion))){
             actualizar(tabla,seccion);
-            estado=estados.get(tabla);
+            previo=estados.get(tabla);
         }
+        final Estado estado=previo;
         JPopupMenu menu=new JPopupMenu("Columnas visibles");
         if(tabla.getModel().getColumnCount()==0){
             JMenuItem sinDatos=new JMenuItem("Realice una consulta primero");
