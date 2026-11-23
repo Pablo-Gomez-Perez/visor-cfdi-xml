@@ -391,7 +391,21 @@ class MvpFiscalServiceIT {
                     pago(6, 15, "580", "REP-junio-receptor", 20011L)));
             financiera.registrar(actor, a, PUE, pago(6, 20, "60", "Banco-junio-PUE", null));
             financiera.registrar(actor, a, PUE, pago(7, 5, "20", "Banco-julio-PUE", null));
+            // Propuesta automática de nota de crédito relacionada, sin captura manual de UUID.
+            var propuestasNota=financiera.notasRelacionadas(actor,a,PUE);
+            assertEquals(1,propuestasNota.size());
+            assertEquals(NOTA,propuestasNota.get(0).documento());
+            assertTrue(propuestasNota.get(0).aplicable());
+            igual("116",propuestasNota.get(0).disponible());
+            assertTrue(financiera.notasRelacionadas(actor,a,FACTURA).isEmpty());
+            var financieroConNota=resumen.consultar(actor,julio,Seccion.FINANCIERO,0);
+            var pueConNota=documento(financieroConNota,"Documento",PUE);
+            assertEquals(1L,((Number)pueConNota.get(columna(financieroConNota,"NC relacionadas"))).longValue());
+            assertEquals(1L,((Number)pueConNota.get(columna(financieroConNota,"NC con saldo por aplicar"))).longValue());
+            assertThrows(IllegalArgumentException.class,()->financiera.ajustar(actor,a,FACTURA,NOTA,
+                LocalDate.of(2026,7,11),"NOTA_CREDITO",decimal("16"),"Nota asociada a otra factura"));
             financiera.ajustar(actor, a, PUE, NOTA, LocalDate.of(2026, 7, 11), "NOTA_CREDITO", decimal("16"), "Reducción documentada, sin presumir devolución efectiva");
+            igual("100",financiera.notasRelacionadas(actor,a,PUE).get(0).disponible());
             assertThrows(IllegalArgumentException.class, () -> financiera.registrar(actor, a, CANCELADA,
                     pago(7, 12, "10", "Cancelada-rechazada", null)));
             assertThrows(SecurityException.class, () -> financiera.ajustar(actor, a, PUE, PRIVADA,

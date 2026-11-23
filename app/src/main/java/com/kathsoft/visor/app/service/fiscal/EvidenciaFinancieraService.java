@@ -237,6 +237,53 @@ public final class EvidenciaFinancieraService {
         return registrarInterno(actor,titular,documento,pago,true);
     }
 
+    /**
+     * Propuestas de notas de crédito relacionadas de forma explícita mediante
+     * CfdiRelacionados TipoRelacion=01 (SAT). No calcula efectos fiscales.
+     * La nota y la factura deben estar disponibles para el mismo titular.
+     */
+    public record NotaRelacionada(long documento,String uuid,LocalDate emision,String moneda,
+        BigDecimal total,BigDecimal disponible,String estadoSat) {
+        /** Disponible no equivale a saldo de la factura; el usuario confirma su aplicación. */
+        public boolean aplicable(){return "VIGENTE".equals(estadoSat)&&disponible.signum()>0;}
+        @Override public String toString(){
+            return emision+" · "+uuid+" · "+disponible.toPlainString()+" "+moneda
+                +(aplicable()?"":" · Revisar SAT/saldo");
+        }
+    }
+
+    /** Lista NC relacionadas por UUID, incluso si ya tienen aplicaciones parciales. */
+    @SuppressWarnings("unchecked")
+    public List<NotaRelacionada> notasRelacionadas(Long actor,long titular,long documento){
+        return jpa.consultar(em->{
+            AccesoFiscal.exigir(em,actor,titular,Permisos.FISCAL_CONSULTAR);
+            AccesoFiscal.documento(em,titular,documento,false);
+            List<Object[]> r=em.createNativeQuery("""
+                SELECT nc.id,nc.uuid,nc.fecha_emision,c.moneda,c.total,
+                    c.total-COALESCE((SELECT SUM(a.importe_moneda_obligacion)
+                      FROM ajuste_obligacion a JOIN obligacion o ON o.id=a.obligacion_id
+                      WHERE a.documento_soporte_id=nc.id AND o.contribuyente_id=:t),0) disponible,
+                    COALESCE((SELECT es.estado FROM consulta_estado_sat es WHERE es.documento_id=nc.id
+                       ORDER BY es.fecha_consulta DESC,es.id DESC LIMIT 1),'SIN_CONSULTA')
+                FROM documento_fiscal factura
+                JOIN cfdi_relacion_uuid ru ON ru.uuid_relacionado=factura.uuid
+                JOIN cfdi_relacion_grupo g ON g.id=ru.grupo_id AND g.tipo_relacion='01'
+                JOIN documento_fiscal nc ON nc.id=g.documento_id
+                JOIN cfdi c ON c.documento_id=nc.id AND c.tipo='E'
+                JOIN contribuyente_documento cd ON cd.documento_id=nc.id
+                      AND cd.contribuyente_id=:t AND cd.archivado_en IS NULL
+                WHERE factura.id=:d AND EXISTS (
+                  SELECT 1 FROM contribuyente_documento fc
+                  WHERE fc.documento_id=factura.id AND fc.contribuyente_id=:t
+                        AND fc.archivado_en IS NULL)
+                ORDER BY nc.fecha_emision,nc.id
+                """).setParameter("t",titular).setParameter("d",documento).setMaxResults(200).getResultList();
+            return r.stream().map(x->new NotaRelacionada(n(x[0]),x[1].toString(),
+                fecha(x[2]).toLocalDate(),x[3].toString(),(BigDecimal)x[4],
+                (BigDecimal)x[5],x[6].toString())).toList();
+        });
+    }
+
     /** Resuelve el soporte por UUID dentro del alcance autorizado antes de aplicar el ajuste. */
     public long ajustarPorUuid(Long actor,long titular,long documento,String uuid,LocalDate fecha,String tipo,BigDecimal importe,String motivo) {
         Long id=jpa.consultar(em->{
@@ -309,7 +356,15 @@ public final class EvidenciaFinancieraService {
             AccesoFiscal.documento(em,titular,Math.min(documento,soporte),true);AccesoFiscal.documento(em,titular,Math.max(documento,soporte),true);
             Datos d=datos(em,titular,documento),s=datosSoporte(em,titular,soporte);
             if(!d.moneda().equals(s.moneda())||!Objects.equals(d.tercero(),s.tercero())||!d.sentido().equals(s.sentido())||documento==soporte||fecha.isBefore(d.fecha())||fecha.isBefore(s.fecha()))throw new IllegalArgumentException("Soporte, fecha o moneda del ajuste no válidos");
-            if(tipo.equals("NOTA_CREDITO")&&!s.tipo().equals("E"))throw new IllegalArgumentException("Nota de crédito requiere CFDI E");
+            if(tipo.equals("NOTA_CREDITO")){
+                if(!s.tipo().equals("E"))throw new IllegalArgumentException("Nota de crédito requiere CFDI E");
+                List<?> relaciones=em.createNativeQuery("""
+                    SELECT g.id FROM cfdi_relacion_grupo g JOIN cfdi_relacion_uuid u ON u.grupo_id=g.id
+                    WHERE g.documento_id=:soporte AND g.tipo_relacion='01' AND u.uuid_relacionado=:uuid
+                    """).setParameter("soporte",soporte).setParameter("uuid",d.uuid()).getResultList();
+                if(relaciones.isEmpty())throw new IllegalArgumentException("La nota de crédito no identifica esta factura como relacionada (TipoRelacion 01)");
+                if(!"VIGENTE".equals(s.sat()))throw new IllegalArgumentException("Nota de crédito sin SAT VIGENTE; revisar antes de aplicar");
+            }
             long obligacion=obligacion(em,titular,documento,d);
             if(!em.createNativeQuery("SELECT id FROM ajuste_obligacion WHERE obligacion_id=:o AND documento_soporte_id=:s FOR UPDATE").setParameter("o",obligacion).setParameter("s",soporte).getResultList().isEmpty())throw new IllegalArgumentException("Soporte ya aplicado a esta obligación");
             DistribucionDecimal.validar(saldoActual(em,obligacion,d.total()),List.of(importe));
